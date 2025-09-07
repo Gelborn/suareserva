@@ -30,10 +30,6 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
               <span>Começar Grátis</span>
               <ArrowRight className="h-5 w-5" />
             </button>
-            
-            <button className="border-2 border-gray-200 dark:border-gray-600 hover:border-indigo-300 text-gray-700 dark:text-gray-200 px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800">
-              Ver Demo
-            </button>
           </div>
 
           {/* Features */}

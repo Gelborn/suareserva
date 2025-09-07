@@ -27,9 +27,21 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
           )}
           
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white font-mono">
-              suareserva.online
-            </h1>
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                  <div className="w-4 h-4 bg-white rounded-sm transform rotate-12"></div>
+                </div>
+              </div>
+              <div className="flex flex-col">
+                <h1 className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent leading-tight">
+                  SuaReserva
+                </h1>
+                <span className="text-xs text-gray-500 dark:text-gray-400 -mt-1 font-medium">
+                  .online
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 

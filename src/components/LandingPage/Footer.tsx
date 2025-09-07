@@ -8,7 +8,21 @@ const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Logo e Descrição */}
           <div className="col-span-1 md:col-span-2">
-            <h3 className="text-2xl font-bold mb-4">suareserva.online</h3>
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="relative">
+                <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <div className="w-5 h-5 bg-white rounded-md transform rotate-12"></div>
+                </div>
+              </div>
+              <div className="flex flex-col">
+                <h3 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent leading-tight">
+                  SuaReserva
+                </h3>
+                <span className="text-sm text-gray-400 -mt-1 font-medium">
+                  .online
+                </span>
+              </div>
+            </div>
             <p className="text-gray-300 mb-6 max-w-md">
               A plataforma mais simples e eficiente para pequenos negócios 
               gerenciarem seus agendamentos e crescerem de forma sustentável.
