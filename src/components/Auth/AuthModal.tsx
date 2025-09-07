@@ -72,6 +72,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         } else {
           showToast('Email inválido ou não encontrado');
         }
+      } else if (response.status === 422) {
+        showFieldError('email', 'Nenhuma conta encontrada com este email');
       } else {
         showToast('Erro ao enviar código. Tente novamente.');
       }
@@ -416,7 +418,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                     className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white ${
                       errors.phone ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
-                    placeholder="+55 11 99999-9999"
+                    placeholder="+55 11 99999-9999 (DDD + número)"
                     onFocus={() => {
                       if (phone === '') {
                         setPhone('+55 ');
