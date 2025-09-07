@@ -14,10 +14,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, businessName: string) => Promise<void>;
+  login: (email: string, accessToken: string) => Promise<void>;
   logout: () => void;
-  sendMagicLink: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -39,43 +37,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const isAuthenticated = !!user;
 
-  const login = async (email: string, password: string) => {
-    // Mock login - replace with Supabase
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  const login = async (email: string, accessToken: string) => {
+    // Store the access token and user info
+    localStorage.setItem('supabase_access_token', accessToken);
+    
+    // Extract user info from token or make API call to get user details
     setUser({
       id: '1',
       email,
-      name: 'João Silva',
+      name: email.split('@')[0],
       business: {
-        name: 'Barbearia do João',
+        name: 'Meu Negócio',
         type: 'beauty',
-        slug: 'barbearia-do-joao'
+        slug: 'meu-negocio'
       }
     });
-  };
-
-  const register = async (email: string, password: string, businessName: string) => {
-    // Mock register - replace with Supabase
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setUser({
-      id: '1',
-      email,
-      name: businessName,
-      business: {
-        name: businessName,
-        type: 'beauty',
-        slug: businessName.toLowerCase().replace(/\s+/g, '-')
-      }
-    });
-  };
-
-  const sendMagicLink = async (email: string) => {
-    // Mock magic link - replace with Supabase
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('Magic link sent to:', email);
   };
 
   const logout = () => {
+    localStorage.removeItem('supabase_access_token');
     setUser(null);
   };
 
@@ -84,9 +64,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       user,
       isAuthenticated,
       login,
-      register,
-      logout,
-      sendMagicLink
+      logout
     }}>
       {children}
     </AuthContext.Provider>

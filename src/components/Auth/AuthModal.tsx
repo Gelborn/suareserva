@@ -17,8 +17,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [originalMode, setOriginalMode] = useState<'login' | 'register'>(initialMode);
 
-  const { login, register } = useAuth();
+  const { login } = useAuth();
 
   if (!isOpen) return null;
 
@@ -45,12 +46,37 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     clearErrors();
 
     try {
-      // Simular envio do magic link
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setMode('otp');
-      showToast('Código enviado para seu email!', 'success');
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          create_user: false
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setOriginalMode('login');
+        setMode('otp');
+        showToast('Código enviado para seu email!', 'success');
+      } else if (response.status === 400) {
+        if (data.error_description?.includes('User not found') || data.msg?.includes('User not found')) {
+          showFieldError('email', 'Nenhuma conta encontrada com este email');
+        } else if (data.error_description?.includes('Invalid email') || data.msg?.includes('Invalid email')) {
+          showFieldError('email', 'Email inválido');
+        } else {
+          showToast('Email inválido ou não encontrado');
+        }
+      } else {
+        showToast('Erro ao enviar código. Tente novamente.');
+      }
     } catch (error) {
-      showToast('Erro ao enviar código. Tente novamente.');
+      showToast('Erro de conexão. Verifique sua internet.');
     } finally {
       setIsLoading(false);
     }
@@ -77,6 +103,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       const data = await response.json();
 
       if (response.status === 201) {
+        setOriginalMode('register');
         setMode('otp');
         showToast('Conta criada! Código enviado para seu email.', 'success');
       } else if (response.status === 400) {
@@ -89,6 +116,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
             break;
           case 'EMAIL_INVALID':
             showFieldError('email', 'Email inválido');
+            break;
+          case 'BAD_REQUEST':
+            showToast('Dados inválidos. Verifique os campos.');
             break;
           default:
             showToast('Dados inválidos. Verifique os campos.');
@@ -120,19 +150,38 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     clearErrors();
 
     try {
-      // Simular verificação do OTP
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (otpCode === '123456') { // Mock validation
-        if (mode === 'otp' && email) {
-          await login(email, ''); // Mock login
-          onClose();
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          token: otpCode,
+          type: 'email'
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.access_token) {
+        // Login successful
+        await login(email, data.access_token);
+        onClose();
+      } else if (response.status === 400) {
+        if (data.error_description?.includes('Invalid token') || data.msg?.includes('Invalid token')) {
+          showToast('Código inválido. Tente novamente.');
+        } else if (data.error_description?.includes('Token expired') || data.msg?.includes('expired')) {
+          showToast('Código expirado. Solicite um novo código.');
+        } else {
+          showToast('Código inválido. Tente novamente.');
         }
       } else {
-        showToast('Código inválido. Tente novamente.');
+        showToast('Erro ao verificar código. Tente novamente.');
       }
     } catch (error) {
-      showToast('Erro ao verificar código. Tente novamente.');
+      showToast('Erro de conexão. Verifique sua internet.');
     } finally {
       setIsLoading(false);
     }
@@ -144,6 +193,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setName('');
     setPhone('');
     setOtpCode('');
+    setOriginalMode(initialMode);
     clearErrors();
   };
 
@@ -213,7 +263,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         <div className="text-center">
           <button
             type="button"
-            onClick={() => setMode(initialMode)}
+            onClick={() => {
+              setMode(originalMode);
+              setOtpCode('');
+              clearErrors();
+            }}
             className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
           >
             ← Voltar
