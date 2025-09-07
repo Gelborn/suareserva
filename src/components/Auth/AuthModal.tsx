@@ -12,7 +12,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [mode, setMode] = useState<'login' | 'register' | 'otp'>(initialMode);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('+55 ');
+  const [phone, setPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -98,7 +98,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         body: JSON.stringify({
           email: email.trim(),
           name: name.trim(),
-          phone: phone.trim() === '+55' || phone.trim() === '+55 ' ? undefined : phone.trim()
+          phone: phone.trim() === '' ? undefined : phone.trim()
         })
       });
 
@@ -193,7 +193,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setMode(initialMode);
     setEmail('');
     setName('');
-    setPhone('+55 ');
+    setPhone('');
     setOtpCode('');
     setOriginalMode(initialMode);
     clearErrors();
@@ -403,27 +403,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                   <input
                     type="tel"
                     value={phone}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      // Se o usuário apagar tudo, manter o +55
-                      if (value === '' || value === '+') {
-                        setPhone('+55 ');
-                      } else if (!value.startsWith('+55')) {
-                        // Se não começar com +55, adicionar
-                        setPhone('+55 ' + value.replace(/^\+?55?\s?/, ''));
-                      } else {
-                        setPhone(value);
-                      }
-                    }}
+                    onChange={(e) => setPhone(e.target.value)}
                     className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white ${
                       errors.phone ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
-                    placeholder="+55 11 99999-9999 (DDD + número)"
-                    onFocus={() => {
-                      if (phone === '') {
-                        setPhone('+55 ');
-                      }
-                    }}
+                    placeholder="(11) 99999-9999"
                   />
                 </div>
                 {errors.phone && (
