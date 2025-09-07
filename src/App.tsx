@@ -15,17 +15,22 @@ import Agenda from './components/Dashboard/Agenda';
 const MainApp: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const handleGetStarted = () => {
+  const handleGetStarted = (mode: 'login' | 'register' = 'register') => {
+    setAuthModalMode(mode);
     setShowAuthModal(true);
   };
 
+  const handleLoginClick = () => {
+    handleGetStarted('login');
+  };
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
-        <Header onLoginClick={handleGetStarted} />
+        <Header onLoginClick={handleLoginClick} />
         <Hero onGetStarted={handleGetStarted} />
         <Features />
         <Pricing onGetStarted={handleGetStarted} />
@@ -34,6 +39,7 @@ const MainApp: React.FC = () => {
         <AuthModal 
           isOpen={showAuthModal} 
           onClose={() => setShowAuthModal(false)} 
+          initialMode={authModalMode}
         />
       </div>
     );
