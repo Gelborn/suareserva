@@ -102,7 +102,7 @@ const Pricing: React.FC<PricingProps> = ({ onGetStarted }) => {
                 </ul>
 
                 <button
-                  onClick={() => onGetStarted('register')}
+                  onClick={() => onGetStarted()}
                   className={`w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-200 ${
                     plan.popular
                       ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-xl'

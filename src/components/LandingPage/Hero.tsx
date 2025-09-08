@@ -24,7 +24,7 @@ const Hero: React.FC<HeroProps> = ({ onGetStarted }) => {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <button 
-              onClick={() => onGetStarted('register')}
+              onClick={() => onGetStarted()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
             >
               <span>Começar Grátis</span>
