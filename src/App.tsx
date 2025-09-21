@@ -16,7 +16,8 @@ import AuthModal from './components/Auth/AuthModal';
 import Dashboard from './components/Dashboard/Dashboard';
 import Agenda from './components/Dashboard/Agenda';
 
-import { AppToaster } from './components/ui/AppToaster';
+import AppToaster from './components/ui/AppToaster'; // sem chaves
+
 
 const MainApp: React.FC = () => {
   const { isAuthenticated } = useAuth();
