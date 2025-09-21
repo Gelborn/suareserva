@@ -56,12 +56,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [cooldown, setCooldown] = useState(0);
   const cooldownTimerRef = useRef<number | null>(null);
 
-  // proteção auto-submit OTP
-  const autoSubmittedRef = useRef(false);
-
   const { login } = useAuth();
 
-  // refs p/ focos
+  // refs p/ foco
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const otpInputRef = useRef<HTMLInputElement | null>(null);
@@ -179,7 +176,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       if (response.ok) {
         setOriginalMode('login');
         setMode('otp');
-        autoSubmittedRef.current = false;
         setOtpCode('');
         toastSuccess('Código enviado para seu email!');
       } else if (response.status === 400) {
@@ -239,7 +235,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       if (response.status === 201) {
         setOriginalMode('register');
         setMode('otp');
-        autoSubmittedRef.current = false;
         setOtpCode('');
         toastSuccess('Conta criada! Código enviado para seu email.');
       } else if (response.status === 400) {
@@ -303,7 +298,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         toastSuccess('Login realizado com sucesso!');
         onClose();
       } else if (response.status === 400) {
-        autoSubmittedRef.current = false;
         if (data?.error_description?.includes('Invalid token') || data?.msg?.includes('Invalid token')) {
           toastError('Código inválido. Tente novamente.');
         } else if (data?.error_description?.includes('Token expired') || data?.msg?.includes('expired')) {
@@ -312,11 +306,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
           toastError('Código inválido. Tente novamente.');
         }
       } else {
-        autoSubmittedRef.current = false;
         toastError('Erro ao verificar código. Tente novamente.');
       }
     } catch {
-      autoSubmittedRef.current = false;
       toastError('Erro de conexão. Verifique sua internet.');
     } finally {
       setIsLoading(false);
@@ -329,18 +321,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     await actuallyVerifyOtp();
   };
 
-  // auto-submit OTP ao completar 6 dígitos
-  useEffect(() => {
-    if (mode !== 'otp') return;
-    if (otpCode.length === 6 && !isLoading && !autoSubmittedRef.current) {
-      autoSubmittedRef.current = true;
-      const t = setTimeout(() => {
-        actuallyVerifyOtp();
-      }, 80);
-      return () => clearTimeout(t);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otpCode, mode, isLoading]);
+  // 🔥 Importante: sem auto-submit aqui!
+  // (Removido o useEffect que disparava verify quando otpCode.length === 6)
 
   const resendCode = async () => {
     if (isLoading || cooldown > 0) return;
@@ -361,7 +343,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       });
       if (response.ok) {
         toastSuccess('Novo código enviado!');
-        autoSubmittedRef.current = false;
         setOtpCode('');
         startCooldown();
         otpInputRef.current?.focus();
@@ -382,7 +363,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setPhoneDigits('');
     setOtpCode('');
     setOriginalMode(initialMode);
-    autoSubmittedRef.current = false;
     clearFieldErrors();
     stopCooldown();
     setCooldown(0);
@@ -444,7 +424,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
               setMode(originalMode);
               setOtpCode('');
               clearFieldErrors();
-              autoSubmittedRef.current = false;
               stopCooldown();
               setCooldown(0);
             }}
@@ -553,8 +532,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                       }`}
                       placeholder="Ex: Barbearia do João"
                       required
-                      autoComplete="organization"
-                      name="organization"
                     />
                   </div>
                   {errors.name && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.name}</p>}
@@ -571,8 +548,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                     ref={emailInputRef}
                     type="email"
                     inputMode="email"
-                    autoComplete="email"   // Chrome/Edge
-                    name="username"        // Safari/iOS sugere melhor
+                    autoComplete="email"
+                    name="username"
                     autoCapitalize="off"
                     autoCorrect="off"
                     value={email}
