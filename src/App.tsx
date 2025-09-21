@@ -16,33 +16,27 @@ import AuthModal from './components/Auth/AuthModal';
 import Dashboard from './components/Dashboard/Dashboard';
 import Agenda from './components/Dashboard/Agenda';
 
-import AppToaster from './components/ui/AppToaster'; // sem chaves
-
+import AppToaster from './components/ui/AppToaster';
 
 const MainApp: React.FC = () => {
   const { isAuthenticated } = useAuth();
 
-  // Auth modal controlado aqui para uso no Header/Hero/Pricing
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
-  // Sidebar e navegação interna
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'agenda' | 'team' | 'services' | 'store'>('dashboard');
 
-  // util: abre modal definindo o modo
   const handleGetStarted = (mode: 'login' | 'register' = 'register') => {
     setAuthModalMode(mode);
     setShowAuthModal(true);
   };
   const handleLoginClick = () => handleGetStarted('login');
 
-  // se autenticou, garante que o modal feche
   useEffect(() => {
     if (isAuthenticated && showAuthModal) setShowAuthModal(false);
   }, [isAuthenticated, showAuthModal]);
 
-  // Conteúdo autenticado
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -81,15 +75,10 @@ const MainApp: React.FC = () => {
     }
   };
 
-  // Landing (não autenticado)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
-        <Header 
-          onLoginClick={handleLoginClick}
-          // em landing normalmente não exibimos menu hambúrguer
-          showMenu={false}
-        />
+        <Header onLoginClick={handleLoginClick} showMenu={false} />
         <Hero onGetStarted={handleGetStarted} />
         <Features />
         <Pricing onGetStarted={handleGetStarted} />
@@ -105,13 +94,9 @@ const MainApp: React.FC = () => {
     );
   }
 
-  // App (autenticado)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header
-        onMenuClick={() => setSidebarOpen(true)}
-        showMenu={true}
-      />
+      <Header onMenuClick={() => setSidebarOpen(true)} showMenu={true} />
 
       <div className="flex h-[calc(100vh-4rem)]">
         <Sidebar
@@ -128,7 +113,6 @@ const MainApp: React.FC = () => {
         </main>
       </div>
 
-      {/* mantém o toaster também no app autenticado */}
       <AppToaster />
     </div>
   );

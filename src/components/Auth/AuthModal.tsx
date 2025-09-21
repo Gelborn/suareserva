@@ -1,8 +1,8 @@
 // src/components/Auth/AuthModal.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Mail, User, Phone, ArrowRight, Loader, Shield, RotateCcw } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 import { toastError, toastSuccess } from '../../lib/toast';
-import { supabase } from '../../lib/supabaseClient';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -26,13 +26,13 @@ const formatPhoneBr = (digits: string) => {
   if (d.length <= 10) {
     return d.replace(
       /^(\d{0,2})(\d{0,4})(\d{0,4}).*$/,
-      (_, a, b, c) =>
+      (_: any, a: string, b: string, c: string) =>
         `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${c ? `-${c}` : ''}`.trim()
     );
   }
   return d.replace(
     /^(\d{0,2})(\d{0,5})(\d{0,4}).*$/,
-    (_, a, b, c) =>
+    (_: any, a: string, b: string, c: string) =>
       `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${c ? `-${c}` : ''}`.trim()
   );
 };
@@ -44,9 +44,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [mode, setMode] = useState<'login' | 'register' | 'otp'>(initialMode);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-
-  // telefone guardado como dígitos; formatamos só para exibir
-  const [phoneDigits, setPhoneDigits] = useState('');
+  const [phoneDigits, setPhoneDigits] = useState(''); // só dígitos
   const phoneFormatted = formatPhoneBr(phoneDigits);
 
   const [otpCode, setOtpCode] = useState('');
@@ -58,14 +56,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [cooldown, setCooldown] = useState(0);
   const cooldownTimerRef = useRef<number | null>(null);
 
-  // proteção pra não auto-submeter duas vezes
+  // proteção auto-submit OTP
   const autoSubmittedRef = useRef(false);
 
+  const { login } = useAuth();
+
+  // refs p/ focos
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const otpInputRef = useRef<HTMLInputElement | null>(null);
 
-  // quando abre, foca o primeiro campo relevante
+  // foca campo ao abrir/mudar modo
   useEffect(() => {
     if (!isOpen) return;
     const t = setTimeout(() => {
@@ -76,16 +77,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     return () => clearTimeout(t);
   }, [isOpen, mode]);
 
-  // fecha com ESC
+  // fecha no ESC
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, mode, email, name, otpCode, phoneDigits]);
 
-  // se o prop initialMode mudar (ou reabrir o modal), sincroniza estado base
+  // sincroniza initialMode quando abrir
   useEffect(() => {
     if (!isOpen) return;
     setMode(initialMode);
@@ -93,7 +96,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   }, [isOpen, initialMode]);
 
   const clearFieldErrors = () => setErrors({});
-  const showFieldError = (field: string, message: string) => setErrors((prev) => ({ ...prev, [field]: message }));
+
+  const showFieldError = (field: string, message: string) => {
+    setErrors((prev) => ({ ...prev, [field]: message }));
+  };
 
   const onPhoneChange: React.ChangeEventHandler<HTMLInputElement> = (ev) => {
     const next = normalizeBrDigits(ev.target.value);
@@ -101,7 +107,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     if (next && !isValidBrPhoneDigits(next)) {
       setErrors((p) => ({ ...p, phone: 'Telefone inválido. Use 10 ou 11 dígitos.' }));
     } else {
-      setErrors((p) => { const { phone, ...rest } = p; return rest; });
+      setErrors((p) => {
+        const { phone, ...rest } = p;
+        return rest;
+      });
     }
   };
 
@@ -112,7 +121,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     return !!(n && isValidEmail(e));
   }, [mode, email, name]);
 
-  // inicia cooldown ao entrar em OTP
+  // cooldown ao entrar em OTP
   useEffect(() => {
     if (!isOpen) return;
     if (mode === 'otp') startCooldown();
@@ -124,19 +133,24 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setCooldown(RESEND_COOLDOWN_SECONDS);
     cooldownTimerRef.current = window.setInterval(() => {
       setCooldown((c) => {
-        if (c <= 1) { stopCooldown(); return 0; }
+        if (c <= 1) {
+          stopCooldown();
+          return 0;
+        }
         return c - 1;
       });
     }, 1000) as unknown as number;
   };
+
   const stopCooldown = () => {
-    if (cooldownTimerRef.current) { clearInterval(cooldownTimerRef.current); cooldownTimerRef.current = null; }
+    if (cooldownTimerRef.current) {
+      clearInterval(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
   };
+
   useEffect(() => () => stopCooldown(), []);
 
-  /* ============ Fluxos ============ */
-
-  // LOGIN: envia código com SDK (session será criada na verificação)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
@@ -151,20 +165,35 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: eTrim,
-        options: { shouldCreateUser: false },
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email: eTrim, create_user: false }),
       });
-      if (error) {
-        const msg = (error.message || '').toLowerCase();
-        if (msg.includes('not found')) showFieldError('email', 'Nenhuma conta encontrada com este email');
-        else toastError('Erro ao enviar código. Tente novamente.');
-      } else {
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok) {
         setOriginalMode('login');
         setMode('otp');
         autoSubmittedRef.current = false;
         setOtpCode('');
         toastSuccess('Código enviado para seu email!');
+      } else if (response.status === 400) {
+        if (data?.error_description?.includes('User not found') || data?.msg?.includes('User not found')) {
+          showFieldError('email', 'Nenhuma conta encontrada com este email');
+        } else if (data?.error_description?.includes('Invalid email') || data?.msg?.includes('Invalid email')) {
+          showFieldError('email', 'Email inválido');
+        } else {
+          toastError('Email inválido ou não encontrado');
+        }
+      } else if (response.status === 422) {
+        showFieldError('email', 'Nenhuma conta encontrada com este email');
+      } else {
+        toastError('Erro ao enviar código. Tente novamente.');
       }
     } catch {
       toastError('Erro de conexão. Verifique sua internet.');
@@ -173,7 +202,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
   };
 
-  // REGISTER: usa sua edge function para criar user+business e depois manda OTP com SDK
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
@@ -182,6 +210,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
     const eTrim = email.trim();
     const nTrim = name.trim();
+
     if (!nTrim) showFieldError('name', 'Nome é obrigatório');
     if (!isValidEmail(eTrim)) showFieldError('email', 'Email inválido');
     if (phoneDigits && !isValidBrPhoneDigits(phoneDigits))
@@ -192,43 +221,50 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
 
     try {
-      // 1) cria via edge
-      const resp = await fetch('https://uqquluodgdginkddngpp.supabase.co/functions/v1/app/businesses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: eTrim, name: nTrim, phone: phoneDigits || undefined }),
-      });
-      const data = await resp.json().catch(() => ({}));
+      const response = await fetch(
+        'https://uqquluodgdginkddngpp.supabase.co/functions/v1/app/businesses',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: eTrim,
+            name: nTrim,
+            phone: phoneDigits || undefined,
+          }),
+        }
+      );
 
-      if (resp.status === 201) {
-        // 2) envia OTP com SDK (garante fluxo unificado de verificação/persistência)
-        const { error } = await supabase.auth.signInWithOtp({
-          email: eTrim,
-          options: { shouldCreateUser: false },
-        });
-        if (error) {
-          toastError('Conta criada, mas falhou o envio do código. Tente entrar novamente.');
-        } else {
-          setOriginalMode('register');
-          setMode('otp');
-          autoSubmittedRef.current = false;
-          setOtpCode('');
-          toastSuccess('Conta criada! Código enviado para seu email.');
-        }
-      } else if (resp.status === 400) {
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 201) {
+        setOriginalMode('register');
+        setMode('otp');
+        autoSubmittedRef.current = false;
+        setOtpCode('');
+        toastSuccess('Conta criada! Código enviado para seu email.');
+      } else if (response.status === 400) {
         switch (data?.error) {
-          case 'EMAIL_REQUIRED': showFieldError('email', 'Email é obrigatório'); break;
-          case 'NAME_REQUIRED': showFieldError('name', 'Nome é obrigatório'); break;
-          case 'EMAIL_INVALID': showFieldError('email', 'Email inválido'); break;
-          default: toastError('Dados inválidos. Verifique os campos.');
+          case 'EMAIL_REQUIRED':
+            showFieldError('email', 'Email é obrigatório');
+            break;
+          case 'NAME_REQUIRED':
+            showFieldError('name', 'Nome é obrigatório');
+            break;
+          case 'EMAIL_INVALID':
+            showFieldError('email', 'Email inválido');
+            break;
+          default:
+            toastError('Dados inválidos. Verifique os campos.');
         }
-      } else if (resp.status === 409) {
+      } else if (response.status === 409) {
         switch (data?.error) {
           case 'EMAIL_ALREADY_REGISTERED':
           case 'BUSINESS_EMAIL_IN_USE':
-            showFieldError('email', 'Este email já está em uso'); break;
+            showFieldError('email', 'Este email já está em uso');
+            break;
           case 'PHONE_IN_USE':
-            showFieldError('phone', 'Este telefone já está em uso'); break;
+            showFieldError('phone', 'Este telefone já está em uso');
+            break;
           default:
             toastError('Conflito nos dados. Verifique as informações.');
         }
@@ -242,31 +278,42 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
   };
 
-  // VERIFY: usa SDK (cria sessão persistida em IndexedDB). AuthProvider ouvirá e hidrata.
   const actuallyVerifyOtp = async () => {
     if (isLoading) return;
     setIsLoading(true);
     clearFieldErrors();
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: otpCode,
-        type: 'email',
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          token: otpCode,
+          type: 'email',
+        }),
       });
-      if (error) {
-        autoSubmittedRef.current = false;
-        const m = (error.message || '').toLowerCase();
-        if (m.includes('expired')) toastError('Código expirado. Solicite um novo código.');
-        else toastError('Código inválido. Tente novamente.');
-        return;
-      }
-      // data.session existe aqui; sessão já persistida
-      if (data?.session) {
+
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.access_token) {
+        await login(email.trim(), data.access_token);
         toastSuccess('Login realizado com sucesso!');
         onClose();
+      } else if (response.status === 400) {
+        autoSubmittedRef.current = false;
+        if (data?.error_description?.includes('Invalid token') || data?.msg?.includes('Invalid token')) {
+          toastError('Código inválido. Tente novamente.');
+        } else if (data?.error_description?.includes('Token expired') || data?.msg?.includes('expired')) {
+          toastError('Código expirado. Solicite um novo código.');
+        } else {
+          toastError('Código inválido. Tente novamente.');
+        }
       } else {
         autoSubmittedRef.current = false;
-        toastError('Não foi possível iniciar a sessão.');
+        toastError('Erro ao verificar código. Tente novamente.');
       }
     } catch {
       autoSubmittedRef.current = false;
@@ -282,28 +329,37 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     await actuallyVerifyOtp();
   };
 
-  // Auto-submit: sempre que ficar com 6 dígitos, dispara verificação
+  // auto-submit OTP ao completar 6 dígitos
   useEffect(() => {
     if (mode !== 'otp') return;
     if (otpCode.length === 6 && !isLoading && !autoSubmittedRef.current) {
       autoSubmittedRef.current = true;
-      const t = setTimeout(() => { actuallyVerifyOtp(); }, 80);
+      const t = setTimeout(() => {
+        actuallyVerifyOtp();
+      }, 80);
       return () => clearTimeout(t);
     }
-  }, [otpCode, mode, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otpCode, mode, isLoading]);
 
   const resendCode = async () => {
     if (isLoading || cooldown > 0) return;
     const eTrim = email.trim();
-    if (!isValidEmail(eTrim)) { showFieldError('email', 'Email inválido'); return; }
-
+    if (!isValidEmail(eTrim)) {
+      showFieldError('email', 'Email inválido');
+      return;
+    }
     try {
       setIsLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({
-        email: eTrim,
-        options: { shouldCreateUser: false },
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ email: eTrim, create_user: false }),
       });
-      if (!error) {
+      if (response.ok) {
         toastSuccess('Novo código enviado!');
         autoSubmittedRef.current = false;
         setOtpCode('');
@@ -353,7 +409,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         </p>
       </div>
 
-      <form onSubmit={handleOtpVerification} className="space-y-6">
+      <form onSubmit={handleOtpVerification} className="space-y-6" autoComplete="on">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-center">
             Código de Verificação
@@ -366,7 +422,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
             onPaste={(e) => {
               const pasted = e.clipboardData.getData('text') || '';
               const digits = pasted.replace(/\D/g, '').slice(0, 6);
-              if (digits) { e.preventDefault(); setOtpCode(digits); }
+              if (digits) {
+                e.preventDefault();
+                setOtpCode(digits);
+              }
             }}
             className="w-full text-center text-2xl font-mono tracking-widest py-4 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white"
             placeholder="000000"
@@ -417,7 +476,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     </div>
   );
 
-  // overlay clica para fechar (sem vazar clique no conteúdo)
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -473,7 +531,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
               </button>
             </div>
 
-            <form onSubmit={mode === 'login' ? handleLogin : handleRegister} className="space-y-4">
+            <form
+              onSubmit={mode === 'login' ? handleLogin : handleRegister}
+              className="space-y-4"
+              autoComplete="on"
+            >
               {mode === 'register' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -508,6 +570,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                   <input
                     ref={emailInputRef}
                     type="email"
+                    inputMode="email"
+                    autoComplete="email"   // Chrome/Edge
+                    name="username"        // Safari/iOS sugere melhor
+                    autoCapitalize="off"
+                    autoCorrect="off"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-800 dark:text-white ${
@@ -515,8 +582,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
                     }`}
                     placeholder="seu@email.com"
                     required
-                    autoComplete="email"
-                    name="email"
                   />
                 </div>
                 {errors.email && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email}</p>}

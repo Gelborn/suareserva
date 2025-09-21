@@ -6,10 +6,10 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY!,
   {
     auth: {
-      persistSession: true,       // salva (IndexedDB)
-      autoRefreshToken: true,     // renova sozinho
-      detectSessionInUrl: true,   // útil se usar magic link
-      storageKey: 'sr.auth',      // nome da store
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'sr_supabase_auth', // chave única da sua app
     },
   }
 );
