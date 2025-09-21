@@ -1,50 +1,47 @@
-import React, { useState } from 'react';
+// src/App.tsx
+import React, { useEffect, useState } from 'react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
+
 import Hero from './components/LandingPage/Hero';
 import Features from './components/LandingPage/Features';
 import Pricing from './components/LandingPage/Pricing';
 import FAQ from './components/LandingPage/FAQ';
 import Footer from './components/LandingPage/Footer';
+
 import AuthModal from './components/Auth/AuthModal';
 import Dashboard from './components/Dashboard/Dashboard';
 import Agenda from './components/Dashboard/Agenda';
 
+import { AppToaster } from './components/ui/AppToaster';
+
 const MainApp: React.FC = () => {
   const { isAuthenticated } = useAuth();
+
+  // Auth modal controlado aqui para uso no Header/Hero/Pricing
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
 
+  // Sidebar e navegação interna
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agenda' | 'team' | 'services' | 'store'>('dashboard');
+
+  // util: abre modal definindo o modo
   const handleGetStarted = (mode: 'login' | 'register' = 'register') => {
     setAuthModalMode(mode);
     setShowAuthModal(true);
   };
+  const handleLoginClick = () => handleGetStarted('login');
 
-  const handleLoginClick = () => {
-    handleGetStarted('login');
-  };
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-white dark:bg-gray-900">
-        <Header onLoginClick={handleLoginClick} />
-        <Hero onGetStarted={handleGetStarted} />
-        <Features />
-        <Pricing onGetStarted={handleGetStarted} />
-        <FAQ />
-        <Footer />
-        <AuthModal 
-          isOpen={showAuthModal} 
-          onClose={() => setShowAuthModal(false)} 
-          initialMode={authModalMode}
-        />
-      </div>
-    );
-  }
+  // se autenticou, garante que o modal feche
+  useEffect(() => {
+    if (isAuthenticated && showAuthModal) setShowAuthModal(false);
+  }, [isAuthenticated, showAuthModal]);
 
+  // Conteúdo autenticado
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -83,27 +80,55 @@ const MainApp: React.FC = () => {
     }
   };
 
+  // Landing (não autenticado)
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900">
+        <Header 
+          onLoginClick={handleLoginClick}
+          // em landing normalmente não exibimos menu hambúrguer
+          showMenu={false}
+        />
+        <Hero onGetStarted={handleGetStarted} />
+        <Features />
+        <Pricing onGetStarted={handleGetStarted} />
+        <FAQ />
+        <Footer />
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          initialMode={authModalMode}
+        />
+        <AppToaster />
+      </div>
+    );
+  }
+
+  // App (autenticado)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Header 
-        onMenuClick={() => setSidebarOpen(true)} 
+      <Header
+        onMenuClick={() => setSidebarOpen(true)}
         showMenu={true}
       />
-      
+
       <div className="flex h-[calc(100vh-4rem)]">
-        <Sidebar 
+        <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           activeTab={activeTab}
           onTabChange={setActiveTab}
         />
-        
+
         <main className="flex-1 overflow-auto">
           <div className="p-6 max-w-7xl mx-auto">
             {renderContent()}
           </div>
         </main>
       </div>
+
+      {/* mantém o toaster também no app autenticado */}
+      <AppToaster />
     </div>
   );
 };
