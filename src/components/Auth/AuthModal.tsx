@@ -322,7 +322,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setCooldown(0);
   };
 
-    await login(eTrim, data.session.access_token);
+  const handleClose = () => {
     resetModal();
     onClose();
   };
