@@ -1,7 +1,6 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabaseAuth } from '../lib/supabaseAuth';
-import { makeAuthedClient } from '../lib/supabaseAuthed'; // mantém pra consultas RLS
+import { supabase } from '../lib/supabase';
 
 interface Business {
   id: string; name: string; contact_email: string | null; contact_phone: string | null; timezone: string;
@@ -20,9 +19,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => { const c = useContext(AuthContext); if (!c) throw new Error('useAuth must be used within an AuthProvider'); return c; };
 
-async function fetchUserBusiness(accessToken: string): Promise<Business | null> {
-  const sb = makeAuthedClient(accessToken);
-  const { data } = await sb.from('businesses')
+async function fetchUserBusiness(): Promise<Business | null> {
+  const { data } = await supabase.from('businesses')
     .select('id, name, contact_email, contact_phone, timezone')
     .order('created_at', { ascending: true })
     .limit(1);
@@ -35,10 +33,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   // hidrata no boot
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabaseAuth.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setUser(null); return; }
       const payload = session.user;
-      const biz = await fetchUserBusiness(session.access_token);
+      const biz = await fetchUserBusiness();
       setUser({
         id: payload.id,
         email: payload.email || '',
@@ -48,10 +46,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     })();
 
     // escuta mudanças (login, refresh, logout)
-    const { data: sub } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) { setUser(null); return; }
       const payload = session.user;
-      const biz = await fetchUserBusiness(session.access_token);
+      const biz = await fetchUserBusiness();
       setUser({
         id: payload.id,
         email: payload.email || '',
@@ -63,14 +61,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const refreshProfile = async () => {
-    const { data: { session } } = await supabaseAuth.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session || !user) return;
-    const biz = await fetchUserBusiness(session.access_token);
+    const biz = await fetchUserBusiness();
     setUser({ ...user, business: biz });
   };
 
   const logout = async () => {
-    await supabaseAuth.auth.signOut();
+    await supabase.auth.signOut();
     setUser(null);
   };
 

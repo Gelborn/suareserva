@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Mail, User, Phone, ArrowRight, Loader, Shield, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { toastError, toastSuccess } from '../../lib/toast';
-import { supabaseAuth } from '../../lib/supabaseAuth';
+import { supabase } from '../../lib/supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -161,7 +161,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
 
     try {
-      const { error } = await supabaseAuth.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email: eTrim,
         options: { shouldCreateUser: false },
       });
@@ -248,7 +248,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     const eTrim = normEmail(email);
 
     try {
-      const { data, error } = await supabaseAuth.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: eTrim,
         token: otpCode,
         type: 'email', // OTP numérico via e-mail
@@ -291,7 +291,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     }
     try {
       setIsLoading(true);
-      const { error } = await supabaseAuth.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email: eTrim,
         options: { shouldCreateUser: false },
       });
@@ -322,7 +322,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     setCooldown(0);
   };
 
-  const handleClose = () => {
+    await login(eTrim, data.session.access_token);
     resetModal();
     onClose();
   };
