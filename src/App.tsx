@@ -1,4 +1,3 @@
-// src/App.tsx
 import React, { useEffect, useState } from 'react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -19,7 +18,7 @@ import Agenda from './components/Dashboard/Agenda';
 import AppToaster from './components/ui/AppToaster';
 
 const MainApp: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isAuthLoading } = useAuth();
 
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
@@ -36,6 +35,15 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && showAuthModal) setShowAuthModal(false);
   }, [isAuthenticated, showAuthModal]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 grid place-items-center">
+        <div className="text-sm text-gray-600 dark:text-gray-300">Carregando…</div>
+        <AppToaster />
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (activeTab) {

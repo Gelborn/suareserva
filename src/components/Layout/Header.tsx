@@ -4,6 +4,7 @@ import { Menu, Moon, Sun, User, LogIn, ChevronDown } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIsPWA } from '../../hooks/usePWA';
+import { useBusiness } from '../../hooks/useBusiness';
 import ProfileModal from '../Account/ProfileModal';
 
 interface HeaderProps {
@@ -15,9 +16,15 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginClick }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { business, loading: businessLoading, refetch } = useBusiness();
   const isPWA = useIsPWA();
 
-  const bizName = user?.business?.name || user?.name || 'Conta';
+  // nome mostrado: prioriza o business; enquanto carrega, mostra um rótulo leve; senão, cai no user/name
+  const bizName =
+    businessLoading
+      ? 'Carregando…'
+      : business?.name || user?.name || 'Conta';
+
   const [openMenu, setOpenMenu] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -35,6 +42,15 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
       window.removeEventListener('keydown', onKey);
     };
   }, [openMenu]);
+
+  // quando fechar o modal de perfil, refetch para refletir renome/edições
+  useEffect(() => {
+    if (!openProfile && user) {
+      // dá um micro atraso para o backend confirmar update (se houver)
+      const t = setTimeout(() => refetch(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [openProfile, user, refetch]);
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
@@ -65,6 +81,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
             onClick={toggleTheme}
             className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             aria-label="Alternar tema"
+            title={theme === 'light' ? 'Tema escuro' : 'Tema claro'}
           >
             {theme === 'light' ? (
               <Moon className="h-5 w-5 text-gray-600" />

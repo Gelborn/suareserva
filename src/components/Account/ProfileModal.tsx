@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Building2, Mail, Phone, Globe, Copy } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBusiness } from '../../hooks/useBusiness';
 import { toastSuccess } from '../../lib/toast';
 
 const formatPhoneBr = (digits?: string | null) => {
@@ -10,11 +11,19 @@ const formatPhoneBr = (digits?: string | null) => {
   const d = String(digits).replace(/\D/g, '').slice(0, 11);
   if (!d) return '';
   return d.length <= 10
-    ? d.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_, a, b, c) =>
-        `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${c ? `-${c}` : ''}`.trim()
+    ? d.replace(
+        /^(\d{0,2})(\d{0,4})(\d{0,4}).*$/,
+        (_: any, a: string, b: string, c: string) =>
+          `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${
+            c ? `-${c}` : ''
+          }`.trim()
       )
-    : d.replace(/^(\d{0,2})(\d{0,5})(\d{0,4}).*$/, (_, a, b, c) =>
-        `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${c ? `-${c}` : ''}`.trim()
+    : d.replace(
+        /^(\d{0,2})(\d{0,5})(\d{0,4}).*$/,
+        (_: any, a: string, b: string, c: string) =>
+          `${a ? `(${a}${a.length === 2 ? ')' : ''}` : ''}${a && a.length === 2 ? ' ' : ''}${b}${
+            c ? `-${c}` : ''
+          }`.trim()
       );
 };
 
@@ -22,7 +31,8 @@ type ProfileModalProps = { open: boolean; onClose: () => void };
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
   const { user } = useAuth();
-  const biz = user?.business || null;
+  const { business, loading: bizLoading } = useBusiness();
+  const biz = business || null;
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,8 +52,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
     try {
       await navigator.clipboard.writeText(text);
       toastSuccess('Copiado!');
-    } catch {}
+    } catch {
+      // silencioso
+    }
   };
+
+  const nameDisplay = bizLoading ? 'Carregando…' : biz?.name || 'Negócio';
+  const emailDisplay = biz?.contact_email || user?.email || '';
+  const phoneDisplay = formatPhoneBr(biz?.contact_phone) || '';
 
   const node = (
     <div
@@ -65,7 +81,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
               <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{biz?.name || 'Negócio'}</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {nameDisplay}
+              </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">Perfil do negócio</p>
             </div>
           </div>
@@ -82,13 +100,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Nome</p>
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{biz?.name || '—'}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {nameDisplay || '—'}
+              </p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Time zone</p>
               <div className="flex items-center gap-2">
                 <Globe className="h-4 w-4 text-gray-400" />
-                <p className="text-sm text-gray-900 dark:text-white">{biz?.timezone || 'America/Sao_Paulo'}</p>
+                <p className="text-sm text-gray-900 dark:text-white">
+                  {biz?.timezone || 'America/Sao_Paulo'}
+                </p>
               </div>
             </div>
 
@@ -98,14 +120,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
                 <div className="flex items-center gap-2 overflow-hidden">
                   <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <p className="text-sm text-gray-900 dark:text-white truncate">
-                    {biz?.contact_email || user?.email || '—'}
+                    {emailDisplay || '—'}
                   </p>
                 </div>
-                {(biz?.contact_email || user?.email) && (
+                {!!emailDisplay && (
                   <button
-                    onClick={() => copy(biz?.contact_email || user?.email!)}
+                    onClick={() => copy(emailDisplay)}
                     className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
                     title="Copiar e-mail"
+                    disabled={bizLoading}
                   >
                     <Copy className="h-4 w-4 text-gray-500" />
                   </button>
@@ -119,14 +142,15 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onClose }) => {
                 <div className="flex items-center gap-2 overflow-hidden">
                   <Phone className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <p className="text-sm text-gray-900 dark:text-white truncate">
-                    {formatPhoneBr(biz?.contact_phone) || '—'}
+                    {phoneDisplay || '—'}
                   </p>
                 </div>
-                {biz?.contact_phone && (
+                {!!phoneDisplay && (
                   <button
-                    onClick={() => copy(formatPhoneBr(biz.contact_phone))}
+                    onClick={() => copy(phoneDisplay)}
                     className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
                     title="Copiar telefone"
+                    disabled={bizLoading}
                   >
                     <Copy className="h-4 w-4 text-gray-500" />
                   </button>

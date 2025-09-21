@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Mail, User, Phone, ArrowRight, Loader, Shield, RotateCcw } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { toastError, toastSuccess } from '../../lib/toast';
 import { supabase } from '../../lib/supabase';
 
@@ -56,8 +55,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   const [cooldown, setCooldown] = useState(0);
   const cooldownTimerRef = useRef<number | null>(null);
 
-  const { login } = useAuth();
-
   // refs p/ foco
   const emailInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -82,8 +79,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, mode, email, name, otpCode, phoneDigits]);
+  }, [isOpen]);
 
   // sincroniza initialMode quando abrir
   useEffect(() => {
@@ -119,9 +115,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
 
   // inicia cooldown ao entrar em OTP
   useEffect(() => {
-    if (!isOpen) return;
-    if (mode === 'otp') startCooldown();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (isOpen && mode === 'otp') startCooldown();
   }, [mode, isOpen]);
 
   const startCooldown = () => {
@@ -145,7 +139,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
   };
   useEffect(() => () => stopCooldown(), []);
 
-  /* ===== Actions com supabaseAuth (singleton) ===== */
+  /* ===== Actions ===== */
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,10 +169,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         const msg = (error.message || '').toLowerCase();
         if (msg.includes('not found')) showFieldError('email', 'Nenhuma conta encontrada com este email');
         else if (msg.includes('invalid')) showFieldError('email', 'Email inválido');
-        else toastError('Não foi possível enviar o código.');
+        else toastError('Não foi possível enviar o código.', error.message);
       }
-    } catch {
-      toastError('Erro de conexão. Verifique sua internet.');
+    } catch (err: any) {
+      toastError('Erro de conexão ao enviar o código.', err?.message);
     } finally {
       setIsLoading(false);
     }
@@ -233,8 +227,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       } else {
         toastError('Erro interno. Tente novamente mais tarde.');
       }
-    } catch {
-      toastError('Erro de conexão. Verifique sua internet.');
+    } catch (err: any) {
+      toastError('Erro de conexão. Verifique sua internet.', err?.message);
     } finally {
       setIsLoading(false);
     }
@@ -255,7 +249,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
       });
 
       if (!error && data?.session?.access_token) {
-        await login(eTrim, data.session.access_token);
+        // Sessão já está setada no client; o AuthContext vai hidratar o usuário.
         toastSuccess('Login realizado com sucesso!');
         onClose();
       } else {
@@ -263,11 +257,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         if (msg.includes('invalid') || msg.includes('expired')) {
           toastError('Código inválido ou expirado. Tente reenviar.');
         } else {
-          toastError('Não foi possível verificar o código.');
+          toastError('Não foi possível verificar o código.', error?.message);
         }
       }
-    } catch {
-      toastError('Erro de conexão. Verifique sua internet.');
+    } catch (err: any) {
+      toastError('Erro de conexão ao verificar o código.', err?.message);
     } finally {
       setIsLoading(false);
     }
@@ -301,10 +295,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMode = 'l
         startCooldown();
         otpInputRef.current?.focus();
       } else {
-        toastError('Não foi possível reenviar o código.');
+        toastError('Não foi possível reenviar o código.', error.message);
       }
-    } catch {
-      toastError('Erro de conexão ao reenviar código.');
+    } catch (err: any) {
+      toastError('Erro de conexão ao reenviar código.', err?.message);
     } finally {
       setIsLoading(false);
     }

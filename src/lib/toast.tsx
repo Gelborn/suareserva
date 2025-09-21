@@ -1,4 +1,4 @@
-// src/lib/toast.ts
+// src/lib/toast.tsx
 import toast, { ToastOptions } from 'react-hot-toast';
 import React from 'react';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
