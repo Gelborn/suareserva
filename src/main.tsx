@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { hookSessionMirror, restoreSessionIfNeeded } from './lib/sessionMirror';
-import { supabase } from './lib/supabaseClient';
+import { supabaseAuth } from './lib/supabaseAuth.ts';
 
 async function bootstrap() {
   // liga o espelho de sessão
@@ -16,7 +16,7 @@ async function bootstrap() {
   // quando a app volta ao foreground, garante sessão novamente
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible') {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await supabaseAuth.auth.getSession();
       if (!data.session) await restoreSessionIfNeeded();
     }
   });

@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabaseAuth } from '../lib/supabaseAuth';
 import { makeAuthedClient } from '../lib/supabaseAuthed'; // mantém pra consultas RLS
 
 interface Business {
@@ -15,6 +15,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   logout: () => void;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => { const c = useContext(AuthContext); if (!c) throw new Error('useAuth must be used within an AuthProvider'); return c; };
@@ -34,7 +35,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   // hidrata no boot
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseAuth.auth.getSession();
       if (!session) { setUser(null); return; }
       const payload = session.user;
       const biz = await fetchUserBusiness(session.access_token);
@@ -47,7 +48,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     })();
 
     // escuta mudanças (login, refresh, logout)
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: sub } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
       if (!session) { setUser(null); return; }
       const payload = session.user;
       const biz = await fetchUserBusiness(session.access_token);
@@ -62,14 +63,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const refreshProfile = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseAuth.auth.getSession();
     if (!session || !user) return;
     const biz = await fetchUserBusiness(session.access_token);
     setUser({ ...user, business: biz });
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    await supabaseAuth.auth.signOut();
     setUser(null);
   };
 

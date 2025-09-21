@@ -1,15 +1,31 @@
 // src/lib/supabaseAuthed.ts
 import { createClient } from '@supabase/supabase-js';
 
-const url  = import.meta.env.VITE_SUPABASE_URL!;
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+const url = import.meta.env.VITE_SUPABASE_URL as string;
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
-/**
- * Cria um client que envia Authorization: Bearer <token> em TODAS as requisições.
- * Útil quando você já tem o access_token (OTP verify) e quer usar RLS direto.
- */
+// cache por token para evitar criar N clients por render
+const cache = new Map<string, ReturnType<typeof createClient>>();
+
 export function makeAuthedClient(accessToken: string) {
-  return createClient(url, anon, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  const key = accessToken.slice(0, 16); // só pra diferenciar a storageKey
+  const cacheKey = `sr-authed-${key}`;
+  const found = cache.get(cacheKey);
+  if (found) return found;
+
+  const client = createClient(url, anon, {
+    // envia o Bearer para todas as requisições (RLS)
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    auth: {
+      persistSession: false,          // não queremos que esse client gerencie sessão
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: cacheKey,           // storageKey único por token => sem warning
+    },
   });
+
+  cache.set(cacheKey, client);
+  return client;
 }
