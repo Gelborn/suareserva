@@ -14,6 +14,7 @@ import Footer from './components/LandingPage/Footer';
 import AuthModal from './components/Auth/AuthModal';
 import Dashboard from './components/Dashboard/Dashboard';
 import Agenda from './components/Dashboard/Agenda';
+import Store from './components/Dashboard/Store';
 
 import AppToaster from './components/ui/AppToaster';
 
@@ -70,14 +71,7 @@ const MainApp: React.FC = () => {
           </div>
         );
       case 'store':
-        return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Loja</h1>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700">
-              <p className="text-gray-600 dark:text-gray-300">Personalização da loja em desenvolvimento...</p>
-            </div>
-          </div>
-        );
+        return <Store />;
       default:
         return <Dashboard />;
     }
