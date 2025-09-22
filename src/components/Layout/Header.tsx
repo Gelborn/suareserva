@@ -1,5 +1,5 @@
 // src/components/Layout/Header.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Menu, Moon, Sun, User, LogIn, ChevronDown } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,22 +13,26 @@ interface HeaderProps {
   onLoginClick?: () => void;
 }
 
+const LS_KEY = 'sr.displayName';
+
 const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginClick }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { business, loading: businessLoading, refetch } = useBusiness();
   const isPWA = useIsPWA();
 
-  // nome mostrado: prioriza o business; enquanto carrega, mostra um rótulo leve; senão, cai no user/name
-  const bizName =
-    businessLoading
-      ? 'Carregando…'
-      : business?.name || user?.name || 'Conta';
-
   const [openMenu, setOpenMenu] = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
+  // mantém um nome "estável" entre refetches p/ evitar flash
+  const [displayName, setDisplayName] = useState<string>(() => {
+    // tenta recuperar do storage (último conhecido)
+    const fromLS = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
+    return fromLS || user?.name || '';
+  });
+
+  // fecha menu ao clicar fora / Esc
   useEffect(() => {
     if (!openMenu) return;
     const onDocClick = (e: MouseEvent) => {
@@ -43,14 +47,39 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
     };
   }, [openMenu]);
 
-  // quando fechar o modal de perfil, refetch para refletir renome/edições
+  // sincroniza displayName:
+  // 1) se chegou business.name, prioriza e persiste
+  // 2) se não há business e terminou loading, usa user.name (se houver)
+  useEffect(() => {
+    if (business?.name) {
+      setDisplayName(business.name);
+      try { localStorage.setItem(LS_KEY, business.name); } catch {}
+      return;
+    }
+    if (!businessLoading && !business?.name && user?.name && !displayName) {
+      setDisplayName(user.name);
+      try { localStorage.setItem(LS_KEY, user.name); } catch {}
+    }
+  }, [business?.name, businessLoading, user?.name]); // displayName intencionalmente fora
+
+  // ao fechar o modal de perfil, refetch após breve delay
   useEffect(() => {
     if (!openProfile && user) {
-      // dá um micro atraso para o backend confirmar update (se houver)
       const t = setTimeout(() => refetch(), 300);
       return () => clearTimeout(t);
     }
   }, [openProfile, user, refetch]);
+
+  // skeleton curto quando ainda não temos nenhum nome conhecido
+  const nameNode = useMemo(() => {
+    if (displayName && displayName.trim().length > 0) return displayName;
+    if (businessLoading) {
+      return (
+        <span className="inline-block h-3 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+      );
+    }
+    return 'Conta';
+  }, [displayName, businessLoading]);
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
@@ -112,7 +141,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
                   <User className="h-4 w-4 text-white" />
                 </div>
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-200 hidden sm:block">
-                  {bizName}
+                  {nameNode}
                 </span>
                 <ChevronDown className="h-4 w-4 text-gray-500 hidden sm:block" />
               </button>

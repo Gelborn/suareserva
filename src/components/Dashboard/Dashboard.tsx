@@ -1,3 +1,4 @@
+// src/pages/Dashboard.tsx
 import React from 'react';
 import { 
   DollarSign, 
@@ -7,7 +8,19 @@ import {
   Clock,
   CheckCircle
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Area, 
+  AreaChart 
+} from 'recharts';
+import { useBusiness } from '../../hooks/useBusiness';
+import { useAuth } from '../../contexts/AuthContext';
 
 const mockData = [
   { name: 'Seg', agendamentos: 8, faturamento: 480 },
@@ -26,6 +39,8 @@ const upcomingAppointments = [
   { id: 4, client: 'Ana Costa', service: 'Escova + Hidratação', time: '14:00', duration: '90min', price: 80 },
 ];
 
+const LS_KEY = 'sr.displayName';
+
 const CardBase = ({ children }: { children: React.ReactNode }) => (
   <div className="bg-white dark:bg-gray-800 rounded-lg md:rounded-xl p-4 md:p-6 shadow-sm border border-gray-100 dark:border-gray-700">
     {children}
@@ -33,13 +48,40 @@ const CardBase = ({ children }: { children: React.ReactNode }) => (
 );
 
 const Dashboard: React.FC = () => {
+  const { business, loading: businessLoading } = useBusiness();
+  const { user } = useAuth();
+
+  // nome estável para evitar flash
+  const [displayName, setDisplayName] = React.useState<string>(() => {
+    const fromLS = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
+    return fromLS || user?.name || '';
+  });
+
+  React.useEffect(() => {
+    if (business?.name) {
+      setDisplayName(business.name);
+      try { localStorage.setItem(LS_KEY, business.name); } catch {}
+      return;
+    }
+    if (!businessLoading && !business?.name && user?.name && !displayName) {
+      setDisplayName(user.name);
+      try { localStorage.setItem(LS_KEY, user.name); } catch {}
+    }
+  }, [business?.name, businessLoading, user?.name]);
+
   return (
     <div className="space-y-6 md:space-y-8">
-      {/* Header */}
+      {/* Header personalizado */}
       <div className="space-y-1.5">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white">
+          {displayName ? `Olá, ${displayName}` : (
+            businessLoading ? (
+              <span className="inline-block h-6 w-40 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            ) : 'Dashboard'
+          )}
+        </h1>
         <p className="text-sm md:text-base text-gray-600 dark:text-gray-300">
-          Bem-vindo de volta! Aqui está um resumo do seu negócio hoje.
+          Aqui está um resumo do seu negócio hoje.
         </p>
       </div>
 
