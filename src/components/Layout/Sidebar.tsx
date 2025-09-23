@@ -24,7 +24,6 @@ const menuItems = [
   { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
   { id: 'agenda', label: 'Agenda', icon: Calendar },
   { id: 'team', label: 'Time', icon: Users },
-  { id: 'services', label: 'Serviços', icon: Settings },
   { id: 'store', label: 'Loja', icon: Store },
 ];
 

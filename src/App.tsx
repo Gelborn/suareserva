@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -14,18 +16,20 @@ import Footer from './components/LandingPage/Footer';
 import AuthModal from './components/Auth/AuthModal';
 import Dashboard from './components/Dashboard/Dashboard';
 import Agenda from './components/Dashboard/Agenda';
-import Store from './components/Dashboard/Store';
+import Stores from './components/store/Stores';
+import StorePage from './components/store/StorePage';
 
 import AppToaster from './components/ui/AppToaster';
 
-const MainApp: React.FC = () => {
+const AuthedShell: React.FC = () => {
   const { isAuthenticated, isAuthLoading } = useAuth();
-
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agenda' | 'team' | 'services' | 'store'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agenda' | 'team' | 'store'>('dashboard');
+
+  const navigate = useNavigate();
 
   const handleGetStarted = (mode: 'login' | 'register' = 'register') => {
     setAuthModalMode(mode);
@@ -46,37 +50,7 @@ const MainApp: React.FC = () => {
     );
   }
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'agenda':
-        return <Agenda />;
-      case 'team':
-        return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Time</h1>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700">
-              <p className="text-gray-600 dark:text-gray-300">Gestão de equipe em desenvolvimento...</p>
-            </div>
-          </div>
-        );
-      case 'services':
-        return (
-          <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Serviços</h1>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700">
-              <p className="text-gray-600 dark:text-gray-300">Cadastro de serviços em desenvolvimento...</p>
-            </div>
-          </div>
-        );
-      case 'store':
-        return <Store />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
+  // público
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -96,6 +70,27 @@ const MainApp: React.FC = () => {
     );
   }
 
+  // handler para o Sidebar navegar
+  const handleTabChange = (tab: 'dashboard' | 'agenda' | 'team' | 'store') => {
+    setActiveTab(tab);
+    switch (tab) {
+      case 'dashboard':
+        navigate('/dashboard');
+        break;
+      case 'agenda':
+        navigate('/agenda');
+        break;
+      case 'team':
+        navigate('/team');
+        break;
+      case 'store':
+        navigate('/stores');
+        break;
+      default:
+        navigate('/dashboard');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header onMenuClick={() => setSidebarOpen(true)} showMenu={true} />
@@ -105,12 +100,33 @@ const MainApp: React.FC = () => {
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
         />
 
         <main className="flex-1 overflow-auto">
           <div className="p-6 max-w-7xl mx-auto">
-            {renderContent()}
+            {/* AGORA usamos rotas aqui dentro */}
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/agenda" element={<Agenda />} />
+              {/* Você pode colocar sua tela de team aqui quando existir */}
+              <Route
+                path="/team"
+                element={
+                  <div className="space-y-6">
+                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Time</h1>
+                    <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700">
+                      <p className="text-gray-600 dark:text-gray-300">Gestão de equipe em desenvolvimento...</p>
+                    </div>
+                  </div>
+                }
+              />
+              <Route path="/stores" element={<Stores />} />
+              <Route path="/stores/:id" element={<StorePage />} />
+              {/* fallback */}
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
           </div>
         </main>
       </div>
@@ -122,11 +138,13 @@ const MainApp: React.FC = () => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
-    </ThemeProvider>
+    <BrowserRouter>
+      <ThemeProvider>
+        <AuthProvider>
+          <AuthedShell />
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
 
