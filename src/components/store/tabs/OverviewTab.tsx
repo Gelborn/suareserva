@@ -1,9 +1,11 @@
 import React from 'react';
 import Card from '../components/Card';
 import Checklist from '../components/Checklist';
-import { Info, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { TabKey } from '../components/Tabs';
 import toast from 'react-hot-toast';
+// ⚠️ Ajuste este import conforme seu projeto
+import { supabase } from '../../../lib/supabase';
 
 import type { StoreForm } from './InfoTab';
 
@@ -23,6 +25,7 @@ const prettyUrl = (s?: string) =>
     .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 const OverviewTab: React.FC<{
+  storeId: string;            // ✅ novo: necessário para salvar o slug
   info: StoreForm;
   logoUrl: string | null;     // compat
   primary: string;            // —
@@ -30,15 +33,12 @@ const OverviewTab: React.FC<{
   completeness: Completeness;
   goTo: (tab: TabKey) => void;
   domainBase?: string;
-  onCheckSlug?: (slug: string) => Promise<SlugCheckResult>;
-  onSaveSlug?: (slug: string) => Promise<void>;
 }> = ({
+  storeId,
   info,
   completeness,
   goTo,
   domainBase = 'suareserva.online',
-  onCheckSlug,
-  onSaveSlug,
 }) => {
   const steps = [
     { ok: completeness.filledInfo,     label: 'Dados da loja',            tab: 'info' as TabKey },
@@ -59,38 +59,80 @@ const OverviewTab: React.FC<{
     setMsg('');
   }, [info.slug]);
 
+  // ----- Supabase integration
+  const checkSlug = React.useCallback(async (raw: string): Promise<SlugCheckResult> => {
+    const s = prettyUrl(raw);
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) return { available: false };
+    const { data, error } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('slug', s)
+      .limit(1);
+
+    if (error) return { available: false };
+    const available = !data || data.length === 0;
+    return { available, suggestion: available ? undefined : `${s}-${Math.floor(Math.random()*900+100)}` };
+  }, []);
+
+  const saveSlug = React.useCallback(async (raw: string) => {
+    const s = prettyUrl(raw);
+    const { error } = await supabase
+      .from('stores')
+      .update({ slug: s })
+      .eq('id', storeId);
+
+    if (error) {
+      // 23505 = unique_violation (banco)
+      if ((error as any)?.code === '23505') throw new Error('Slug já está em uso.');
+      throw error;
+    }
+  }, [storeId]);
+
   const handleCheck = async () => {
     const s = prettyUrl(slug);
     setSlug(s);
     if (!s) { setStatus('error'); setMsg('Informe um slug válido.'); return; }
-    if (!onCheckSlug) { setStatus('ok'); setMsg('Formato válido.'); return; }
     try {
       setStatus('checking'); setMsg('');
-      const res = await onCheckSlug(s);
+      const res = await checkSlug(s);
       if (res.available) { setStatus('ok'); setMsg('Disponível! 🙌'); }
       else { setStatus('taken'); setMsg(res.suggestion ? `Já em uso. Sugestão: ${res.suggestion}` : 'Já em uso.'); }
-    } catch { setStatus('error'); setMsg('Erro ao verificar. Tente novamente.'); }
+    } catch {
+      setStatus('error'); setMsg('Erro ao verificar.'); 
+    }
   };
 
   const handleSave = async () => {
     const s = prettyUrl(slug);
     if (!s) { toast.error('Informe um slug válido.'); return; }
-    if (!onSaveSlug) { toast.success('Slug salvo (mock).'); return; }
-    try { await onSaveSlug(s); toast.success('Slug salvo!'); }
-    catch { toast.error('Não foi possível salvar o slug.'); }
+    if (status !== 'ok') {
+      // reforço: evita salvar sem checar/ok
+      const res = await checkSlug(s);
+      if (!res.available) { setStatus('taken'); setMsg(res.suggestion ? `Já em uso. Sugestão: ${res.suggestion}` : 'Já em uso.'); return; }
+    }
+    try {
+      await saveSlug(s);
+      toast.success('Slug salvo!');
+      setStatus('ok');
+      setMsg('Disponível! 🙌');
+    } catch (err:any) {
+      toast.error(err?.message || 'Não foi possível salvar o slug.');
+    }
   };
 
   const hasSlug = Boolean(info.slug);
   const publicUrl = slug ? `https://${domainBase}/${slug}` : `https://${domainBase}/sua-loja`;
 
+  // container alinhado à esquerda (desktop) com respiro no mobile
+  const inner = 'mx-2 sm:mx-0 sm:max-w-2xl w-full';
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-start-1 lg:col-span-3 p-5">
-        {/* AVISO DISCRETO NO TOPO — com recuo lateral só no mobile */}
+        {/* aviso topo */}
         {!completeness.allGood && (
-          <div className="mb-4">
-            <div className="mx-2 sm:mx-0 flex items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
-              <Info className="w-4 h-4 text-amber-700 dark:text-amber-300 mt-0.5" />
+          <div className={inner + ' mb-4'}>
+            <div className="flex items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
               <p className="text-sm text-amber-900 dark:text-amber-200">
                 Há itens pendentes no checklist abaixo. Conclua todos para liberar a página pública da sua loja.
               </p>
@@ -98,14 +140,13 @@ const OverviewTab: React.FC<{
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-            <Info className="w-5 h-5 text-gray-700 dark:text-slate-200" />
-          </div>
-          <div className="min-w-0">
+        {/* título + progresso (colado à esquerda) */}
+        <div className={inner + ' flex items-start'}>
+          <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Checklist</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-400">Finalize os passos para publicar sua página.</p>
+            <p className="text-sm text-gray-600 dark:text-slate-400">
+              Finalize os passos para publicar sua página.
+            </p>
           </div>
           <div className="ml-auto hidden sm:flex items-center gap-3">
             <span className="text-xs text-gray-600 dark:text-slate-400">{done}/{total} concluídos</span>
@@ -115,8 +156,8 @@ const OverviewTab: React.FC<{
           </div>
         </div>
 
-        {/* Checklist — com recuo lateral só no mobile */}
-        <div className="mt-4 mx-2 sm:mx-0">
+        {/* checklist */}
+        <div className={inner + ' mt-4'}>
           <Checklist
             items={steps.map(s => ({
               ok: s.ok,
@@ -126,11 +167,11 @@ const OverviewTab: React.FC<{
           />
         </div>
 
-        {/* Slug Section */}
+        {/* slug section */}
         {completeness.allGood && (
-          <div className="mt-6">
+          <div className={inner + ' mt-6'}>
             {!hasSlug ? (
-              <div className="mx-2 sm:mx-0 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
+              <div className="rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
                 <div className="text-sm text-indigo-900 dark:text-indigo-200">
                   Sua loja está pronta! Defina o link exclusivo abaixo.
                 </div>
@@ -172,7 +213,7 @@ const OverviewTab: React.FC<{
                 </div>
               </div>
             ) : (
-              <div className="mx-2 sm:mx-0 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-start gap-2">
+              <div className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-700 dark:text-emerald-300" />
                 <div className="text-sm text-emerald-900 dark:text-emerald-200">
                   Sua loja já está ativa em <span className="font-medium">https://{domainBase}/{info.slug}</span>.  

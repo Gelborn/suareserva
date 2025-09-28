@@ -11,6 +11,7 @@ import InfoTab from './tabs/InfoTab';
 import HoursTab from './tabs/HoursTab';
 import ThemeTab from './tabs/ThemeTab';
 import ServicesTab from './tabs/ServicesTab';
+import LoadingScreen from "../../components/ui/LoadingScreen";
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
@@ -19,22 +20,6 @@ const getInitials = (name?: string | null) => {
   if (!name) return 'SR';
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'SR';
-};
-
-// Endereço em uma linha
-const formatAddress = (addr?: {
-  street?: string | null;
-  number?: string | null;
-  district?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
-}) => {
-  if (!addr) return null;
-  const ruaNumero = [addr.street, addr.number].filter(Boolean).join(', ');
-  const bairroCidade = [addr.district, addr.city].filter(Boolean).join(' / ');
-  const parts = [ruaNumero || null, bairroCidade || null].filter(Boolean);
-  return parts.length ? parts.join('. ') : null;
 };
 
 // Ícone TikTok custom (leve)
@@ -141,9 +126,7 @@ const StorePage: React.FC = () => {
   const secondary = (store as any)?.secondary_color || '#8b5cf6';
 
   if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-sm text-gray-500">Carregando…</div>
-    );
+    return <LoadingScreen message="Carregando loja…" />;
   }
 
   if (!store) {
@@ -161,6 +144,9 @@ const StorePage: React.FC = () => {
       </div>
     );
   }
+
+  // ✅ usa a coluna gerada no banco
+  const addressOneLine: string | null = (store as any)?.address_one_line || null;
 
   return (
     <div className="pb-10">
@@ -190,13 +176,10 @@ const StorePage: React.FC = () => {
                   >
                     {store.name || 'Configurar Loja'}
                   </h1>
-                  {/* opcional: ponto de status com secondary
-                  <span className="hidden sm:inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: secondary }} />
-                  */}
                 </div>
 
                 <p className="mt-1 text-sm text-gray-700 dark:text-slate-300 truncate">
-                  {formatAddress(store.address) || (
+                  {addressOneLine || (
                     <span className="text-gray-400 dark:text-slate-500">
                       Loja sem endereço cadastrado
                     </span>
@@ -244,15 +227,17 @@ const StorePage: React.FC = () => {
         <div className="mt-6 space-y-6">
           {active === 'overview' && (
             <OverviewTab
+              storeId={store.id}
               info={{
                 name: store.name,
                 slug: store.slug || '',
-                street: store.address?.street,
-                number: store.address?.number,
-                district: store.address?.district,
-                city: store.address?.city,
-                state: store.address?.state,
-                zip: store.address?.zip,
+                // 👇 agora vindo dos campos granulares
+                street: (store as any).street || '',
+                number: (store as any).number || '',
+                district: (store as any).district || '',
+                city: (store as any).city || '',
+                state: (store as any).state || '',
+                zip: (store as any).zip || '',
                 instagram: (store as any).instagram_url || '',
                 tiktok: (store as any).tiktok_url || '',
               }}
@@ -269,12 +254,12 @@ const StorePage: React.FC = () => {
               value={{
                 name: store.name,
                 slug: store.slug || '',
-                street: store.address?.street,
-                number: store.address?.number,
-                district: store.address?.district,
-                city: store.address?.city,
-                state: store.address?.state,
-                zip: store.address?.zip,
+                street: (store as any).street || '',
+                number: (store as any).number || '',
+                district: (store as any).district || '',
+                city: (store as any).city || '',
+                state: (store as any).state || '',
+                zip: (store as any).zip || '',
                 instagram: (store as any).instagram_url || '',
                 tiktok: (store as any).tiktok_url || '',
               }}
@@ -282,14 +267,13 @@ const StorePage: React.FC = () => {
                 updateStore({
                   name: v.name,
                   slug: v.slug || null,
-                  address: {
-                    street: v.street,
-                    number: v.number,
-                    district: v.district,
-                    city: v.city,
-                    state: v.state,
-                    zip: v.zip,
-                  },
+                  // 👇 gravando nos campos top-level (o JSON address foi removido)
+                  street: v.street || null,
+                  number: v.number || null,
+                  district: v.district || null,
+                  city: v.city || null,
+                  state: v.state || null,
+                  zip: v.zip || null,
                   instagram_url: v.instagram || null,
                   tiktok_url: v.tiktok || null,
                 })
@@ -335,12 +319,12 @@ const StorePage: React.FC = () => {
               info={{
                 name: store.name,
                 slug: store.slug || '',
-                street: store.address?.street,
-                number: store.address?.number,
-                district: store.address?.district,
-                city: store.address?.city,
-                state: store.address?.state,
-                zip: store.address?.zip,
+                street: (store as any).street || '',
+                number: (store as any).number || '',
+                district: (store as any).district || '',
+                city: (store as any).city || '',
+                state: (store as any).state || '',
+                zip: (store as any).zip || '',
                 instagram: (store as any).instagram_url || '',
                 tiktok: (store as any).tiktok_url || '',
               }}
