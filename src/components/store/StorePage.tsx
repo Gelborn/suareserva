@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Instagram } from 'lucide-react';
 
 import { useBusiness } from '../../hooks/useBusiness';
 import { useStore } from '../../hooks/useStores';
@@ -11,6 +11,113 @@ import InfoTab from './tabs/InfoTab';
 import HoursTab from './tabs/HoursTab';
 import ThemeTab from './tabs/ThemeTab';
 import ServicesTab from './tabs/ServicesTab';
+
+/* ───────────────────────── Helpers ───────────────────────── */
+
+// Gera iniciais para fallback
+const getInitials = (name?: string | null) => {
+  if (!name) return 'SR';
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'SR';
+};
+
+// Endereço em uma linha
+const formatAddress = (addr?: {
+  street?: string | null;
+  number?: string | null;
+  district?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}) => {
+  if (!addr) return null;
+  const ruaNumero = [addr.street, addr.number].filter(Boolean).join(', ');
+  const bairroCidade = [addr.district, addr.city].filter(Boolean).join(' / ');
+  const parts = [ruaNumero || null, bairroCidade || null].filter(Boolean);
+  return parts.length ? parts.join('. ') : null;
+};
+
+// Ícone TikTok custom (leve)
+const TikTokIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14" {...props}>
+    <path
+      d="M14 3v3.2a6.8 6.8 0 0 0 6 0V9a9.2 9.2 0 0 1-6-2v7.2a4.2 4.2 0 1 1-3.6-4.15V12a2.2 2.2 0 1 0 1.6 2.11V3h2z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+// Chip social (Instagram/TikTok)
+const SocialChip: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  href?: string | null;
+  emptyText: string;
+  color?: string;
+}> = ({ icon, label, href, emptyText, color }) => {
+  const commonClass =
+    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60';
+
+  if (href && href.trim()) {
+    const handle = href.replace(/^@/, '');
+    const url =
+      label.toLowerCase() === 'instagram'
+        ? `https://instagram.com/${handle}`
+        : `https://www.tiktok.com/@${handle}`;
+
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className={`${commonClass} border border-gray-200 dark:border-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-white/5`}
+        title={`${label}: @${handle}`}
+        style={color ? { color } : undefined}
+      >
+        {icon}
+        <span className="truncate">@{handle}</span>
+      </a>
+    );
+  }
+
+  return (
+    <span
+      className={`${commonClass} border border-dashed border-gray-200 dark:border-slate-800 text-gray-400 dark:text-slate-400 select-none`}
+    >
+      {icon}
+      <span className="truncate">{emptyText}</span>
+    </span>
+  );
+};
+
+// Avatar da loja
+const StoreAvatar: React.FC<{ name?: string | null; logoUrl?: string | null }> = ({
+  name,
+  logoUrl,
+}) => {
+  const initials = getInitials(name);
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={name ?? 'Logo da loja'}
+        className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover
+                   ring-1 ring-black/5 dark:ring-white/5"
+      />
+    );
+  }
+  return (
+    <div
+      className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl grid place-items-center text-white font-semibold
+                 bg-gradient-to-br from-indigo-500 to-violet-500
+                 ring-1 ring-black/5 dark:ring-white/5 select-none"
+    >
+      {initials}
+    </div>
+  );
+};
+
+/* ───────────────────────── Page ───────────────────────── */
 
 const StorePage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,11 +136,13 @@ const StorePage: React.FC = () => {
 
   const [active, setActive] = React.useState<TabKey>('overview');
 
+  // cores da loja
+  const primary = (store as any)?.primary_color || '#6366f1';
+  const secondary = (store as any)?.secondary_color || '#8b5cf6';
+
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-sm text-gray-500">
-        Carregando…
-      </div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-sm text-gray-500">Carregando…</div>
     );
   }
 
@@ -56,27 +165,66 @@ const StorePage: React.FC = () => {
   return (
     <div className="pb-10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
-        {/* Voltar (link), acima do título */}
+        {/* Voltar */}
         <button
           onClick={() => navigate('/stores')}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 dark:hover:text-slate-100"
         >
           <ChevronLeft className="w-4 h-4" />
           Voltar
         </button>
 
-        {/* Mega-card: header + tabs */}
-        <div className="mt-2 bg-white dark:bg-gray-900 border border-gray-200/70 dark:border-gray-700/70 rounded-2xl shadow-sm overflow-hidden">
+        {/* Card principal */}
+        <div className="mt-2 bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
           {/* Header da loja */}
           <div className="px-4 sm:px-6 pt-5 pb-4">
-            <h1 className="text-2xl sm:text-3xl font-bold">{store.name || 'Configurar Loja'}</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Organize as informações, horários, serviços e o visual da sua página pública.
-            </p>
+            <div className="flex items-start sm:items-center gap-4 sm:gap-5">
+              <StoreAvatar name={store.name} logoUrl={(store as any).logo_url || null} />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h1
+                    className="text-2xl sm:text-3xl font-bold tracking-tight truncate"
+                    style={{ color: primary }}
+                    title={store.name || 'Configurar Loja'}
+                  >
+                    {store.name || 'Configurar Loja'}
+                  </h1>
+                  {/* opcional: ponto de status com secondary
+                  <span className="hidden sm:inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: secondary }} />
+                  */}
+                </div>
+
+                <p className="mt-1 text-sm text-gray-700 dark:text-slate-300 truncate">
+                  {formatAddress(store.address) || (
+                    <span className="text-gray-400 dark:text-slate-500">
+                      Loja sem endereço cadastrado
+                    </span>
+                  )}
+                </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <SocialChip
+                    icon={<Instagram className="w-3.5 h-3.5 opacity-90" />}
+                    label="Instagram"
+                    href={(store as any).instagram_url || ''}
+                    emptyText="sem Instagram"
+                    color={primary}
+                  />
+                  <SocialChip
+                    icon={<TikTokIcon className="w-3.5 h-3.5 opacity-90" />}
+                    label="TikTok"
+                    href={(store as any).tiktok_url || ''}
+                    emptyText="sem TikTok"
+                    color={primary}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Barra de Tabs */}
-          <div className="border-t border-gray-200/70 dark:border-gray-700/70">
+          {/* Tabs */}
+          <div className="border-t border-gray-200/70 dark:border-slate-800">
             <Tabs
               value={active}
               onChange={setActive}
@@ -92,7 +240,7 @@ const StorePage: React.FC = () => {
           </div>
         </div>
 
-        {/* Conteúdo das abas */}
+        {/* Conteúdo */}
         <div className="mt-6 space-y-6">
           {active === 'overview' && (
             <OverviewTab
@@ -109,8 +257,8 @@ const StorePage: React.FC = () => {
                 tiktok: (store as any).tiktok_url || '',
               }}
               logoUrl={(store as any).logo_url || null}
-              primary={(store as any).primary_color || '#6366f1'}
-              secondary={(store as any).secondary_color || '#8b5cf6'}
+              primary={primary}
+              secondary={secondary}
               completeness={completion}
               goTo={(t) => setActive(t)}
             />
@@ -196,8 +344,8 @@ const StorePage: React.FC = () => {
                 instagram: (store as any).instagram_url || '',
                 tiktok: (store as any).tiktok_url || '',
               }}
-              primary={(store as any).primary_color || '#6366f1'}
-              secondary={(store as any).secondary_color || '#8b5cf6'}
+              primary={primary}
+              secondary={secondary}
               onPrimary={(v) => updateStore({ primary_color: v })}
               onSecondary={(v) => updateStore({ secondary_color: v })}
               logoUrl={(store as any).logo_url || null}

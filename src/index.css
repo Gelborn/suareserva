@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+@keyframes logoGlow {
+    0%   { opacity: 0.35; transform: scale(0.98); }
+    50%  { opacity: 0.7;  transform: scale(1.02); }
+    100% { opacity: 0.35; transform: scale(0.98); }
+  }
+  
+  /* util para usar com Tailwind via animate-[name] */
+  .animate-logoGlow {
+    animation: logoGlow 2.2s ease-in-out infinite;
+  }
+  

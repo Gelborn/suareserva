@@ -20,6 +20,7 @@ import Stores from './components/store/Stores';
 import StorePage from './components/store/StorePage';
 
 import AppToaster from './components/ui/AppToaster';
+import LoadingScreen from './components/ui/LoadingScreen';
 
 const AuthedShell: React.FC = () => {
   const { isAuthenticated, isAuthLoading } = useAuth();
@@ -43,10 +44,7 @@ const AuthedShell: React.FC = () => {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-gray-900 grid place-items-center">
-        <div className="text-sm text-gray-600 dark:text-gray-300">Carregando…</div>
-        <AppToaster />
-      </div>
+      <LoadingScreen message="Carregando sessão…" />
     );
   }
 
