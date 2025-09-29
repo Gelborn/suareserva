@@ -1,41 +1,79 @@
 import React from 'react';
 import Card from '../components/Card';
 import Field from '../components/Field';
-import { Info, MapPin, Loader2, X } from 'lucide-react';
+import { Info, MapPin, Loader2, X, Phone } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export type StoreForm = {
   name: string;
-  // slug não aparece aqui
-  slug?: string;
+  slug?: string; // não exibido aqui
   street?: string; number?: string; district?: string; city?: string; state?: string; zip?: string;
+  phone?: string; whatsapp?: string;
   instagram?: string; tiktok?: string;
 };
 
+/* ── helpers ─────────────────────────────────────────────── */
 const onlyDigits = (s: string) => (s || '').replace(/\D+/g, '');
 const formatCep = (s: string) => {
   const d = onlyDigits(s).slice(0, 8);
   if (d.length <= 5) return d;
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 };
-const normalizeHandle = (s?: string) => (s || '').trim()
-  .replace(/^https?:\/\/(www\.)?instagram\.com\//i, '@')
-  .replace(/^https?:\/\/(www\.)?tiktok\.com\/@/i, '@')
-  .replace(/^@+/, '@')
-  .replace(/\s+/g, '');
 
+// normaliza @handle e remove barra final se vier URL
+const normalizeHandle = (raw?: string) => {
+  let s = (raw || '').trim();
+  s = s.replace(/\/+$/g, '');
+  s = s.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '@');
+  s = s.replace(/^https?:\/\/(www\.)?tiktok\.com\/@/i, '@');
+  s = s.replace(/^@+/, '@');
+  s = s.replace(/\s+/g, '');
+  return s;
+};
+
+// formata telefone BR de 10–11 dígitos para exibição
+const formatBrPhone = (raw?: string) => {
+  const d = onlyDigits(raw || '').slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  // 11 dígitos (celular com 9)
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+};
+
+// normaliza para salvar (apenas dígitos 10–11)
+const normalizeBrPhoneDigits = (raw?: string) => {
+  const d = onlyDigits(raw || '');
+  return d ? d.slice(0, 11) : '';
+};
+
+/* ── seção visual ────────────────────────────────────────── */
+const SectionTitle: React.FC<{ icon?: React.ReactNode; title: string; desc?: string }> = ({ icon, title, desc }) => (
+  <div className="flex items-start gap-3">
+    {icon && (
+      <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
+        <div className="w-5 h-5 text-gray-700 dark:text-slate-200">{icon}</div>
+      </div>
+    )}
+    <div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{title}</h3>
+      {desc && <p className="text-sm text-gray-600 dark:text-slate-400">{desc}</p>}
+    </div>
+  </div>
+);
+
+/* ── componente ──────────────────────────────────────────── */
 const InfoTab: React.FC<{
   value: StoreForm;
-  onChange: (v: StoreForm) => void; // será chamado SOMENTE no submit
+  onChange: (v: StoreForm) => void; // chamado somente no submit
 }> = ({ value, onChange }) => {
-  // ------- estado local (edita sem salvar) -------
+  // estado local (edita sem salvar no banco)
   const [form, setForm] = React.useState<StoreForm>(value);
   const [cepMasked, setCepMasked] = React.useState(formatCep(value.zip || ''));
   const [loadingCep, setLoadingCep] = React.useState(false);
   const numberRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    // se value mudar externamente (ex: pós-salvar), sincroniza
     setForm(value);
     setCepMasked(formatCep(value.zip || ''));
   }, [value]);
@@ -70,7 +108,6 @@ const InfoTab: React.FC<{
         return;
       }
 
-      // preenche campos a partir do ViaCEP; número fica para o usuário
       setForm(prev => ({
         ...prev,
         zip: formatCep(clean),
@@ -102,33 +139,28 @@ const InfoTab: React.FC<{
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // chama o onChange APENAS aqui -> quem chama persiste no banco
     onChange({
       ...form,
       instagram: normalizeHandle(form.instagram),
       tiktok: normalizeHandle(form.tiktok),
       zip: formatCep(form.zip || ''),
       state: (form.state || '').toUpperCase(),
+      phone: normalizeBrPhoneDigits(form.phone),
+      whatsapp: normalizeBrPhoneDigits(form.whatsapp),
     });
-    toast.success('Dados salvos!');
+    // sem toast de sucesso aqui (evita duplicidade com o pai)
   };
 
   return (
     <Card className="p-5">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-          <Info className="w-5 h-5 text-gray-700 dark:text-slate-200" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Dados da loja</h3>
-          <p className="text-sm text-gray-600 dark:text-slate-400">
-            Essas informações aparecem no seu site e ajudam clientes a te encontrar.
-          </p>
-        </div>
-      </div>
+      {/* Identidade */}
+      <SectionTitle
+        icon={<Info />}
+        title="Identidade"
+        desc="Defina o nome e como sua loja será exibida."
+      />
 
-      <form onSubmit={handleSubmit} className="mt-5 space-y-6">
+      <form onSubmit={handleSubmit} className="mt-5 space-y-10">
         {/* Nome */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Nome da loja">
@@ -144,134 +176,145 @@ const InfoTab: React.FC<{
           <div className="hidden sm:block" />
         </div>
 
-        {/* Endereço - ViaCEP minimalista */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-            <MapPin className="w-4 h-4 opacity-80" />
-            Endereço
+        {/* divisor sutil */}
+        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
+
+        {/* Endereço */}
+        <SectionTitle
+          icon={<MapPin />}
+          title="Endereço"
+          desc="Busque pelo CEP e informe apenas o número."
+        />
+
+        {/* CEP + botão (desktop não quebra linha) */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-[160px_1fr_auto] gap-3">
+          <Field label="CEP">
+            <input
+              inputMode="numeric"
+              autoComplete="postal-code"
+              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                         px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              placeholder="00000-000"
+              value={cepMasked}
+              onChange={(e) => {
+                const m = formatCep(e.target.value);
+                setCepMasked(m);
+                setLocal('zip', m); // estado local
+              }}
+            />
+          </Field>
+
+          <div className="hidden sm:flex items-end text-xs text-gray-500 dark:text-slate-500">
+            Digite o CEP e clique em “Carregar endereço”.
           </div>
 
-          {/* CEP + botão */}
-          <div className="grid grid-cols-1 sm:grid-cols-[160px_auto_120px] gap-3">
-            <Field label="CEP">
-              <input
-                inputMode="numeric"
-                autoComplete="postal-code"
-                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
-                           px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
-                           focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-                placeholder="00000-000"
-                value={cepMasked}
-                onChange={(e) => {
-                  const m = formatCep(e.target.value);
-                  setCepMasked(m);
-                  // atualiza apenas o zip no estado local (sem salvar)
-                  setLocal('zip', m);
-                }}
-              />
-            </Field>
-
-            {/* dica */}
-            <div className="self-end text-xs text-gray-500 dark:text-slate-500">
-              Digite o CEP e clique em “Carregar endereço”. Só precisa informar o número.
-            </div>
-
-            <div className="self-end">
-              <button
-                type="button"
-                onClick={handleLoadAddress}
-                disabled={loadingCep || onlyDigits(cepMasked).length !== 8}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl
-                           border border-gray-200 dark:border-slate-700
-                           bg-gray-50 hover:bg-gray-100 dark:bg-slate-900/70 dark:hover:bg-slate-800
-                           text-gray-800 dark:text-slate-200 text-sm font-medium transition disabled:opacity-50"
-              >
-                {loadingCep ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Carregar endereço
-              </button>
-            </div>
+          <div className="self-end">
+            <button
+              type="button"
+              onClick={handleLoadAddress}
+              disabled={loadingCep || onlyDigits(cepMasked).length !== 8}
+              className="min-w-[170px] whitespace-nowrap inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl
+                         border border-gray-200 dark:border-slate-700
+                         bg-gray-50 hover:bg-gray-100 dark:bg-slate-900/70 dark:hover:bg-slate-800
+                         text-gray-800 dark:text-slate-200 text-sm font-medium transition disabled:opacity-50"
+            >
+              {loadingCep ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Carregar endereço
+            </button>
           </div>
+        </div>
 
-          {/* One-liner + Número (aparece só depois de carregar) */}
-          {hasLoadedAddress && (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm
-                              text-gray-800 dark:text-slate-100 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  {oneLiner || '—'}
-                  <div className="text-xs text-gray-500 dark:text-slate-400">
-                    (Logradouro/bairro/cidade/UF carregados via CEP)
-                  </div>
-                </div>
+        {/* One-liner + Número */}
+        {hasLoadedAddress && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm
+                            text-gray-800 dark:text-slate-100">
+              {oneLiner || '—'}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
+              <Field label="Número" className="sm:col-span-2">
+                <input
+                  ref={numberRef}
+                  className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                             px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                             focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+                  value={form.number || ''}
+                  onChange={(e) => setLocal('number', e.target.value)}
+                />
+              </Field>
+
+              <div className="sm:col-span-4 flex items-end">
                 <button
                   type="button"
                   onClick={handleClearAddress}
-                  className="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100"
+                  className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm
+                             border border-gray-200 dark:border-slate-700
+                             text-gray-700 dark:text-slate-200
+                             hover:bg-gray-50 dark:hover:bg-slate-800 transition"
                   title="Limpar endereço"
                 >
-                  <X className="w-3.5 h-3.5" />
-                  Limpar
+                  <X className="w-4 h-4" />
+                  Limpar endereço
                 </button>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-                <Field label="Número" className="sm:col-span-2">
-                  <input
-                    ref={numberRef}
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
-                               px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
-                               focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-                    value={form.number || ''}
-                    onChange={(e) => setLocal('number', e.target.value)}
-                  />
-                </Field>
-                {/* campos carregados são apenas display; não editáveis */}
-                <Field label="Rua" className="sm:col-span-4">
-                  <input
-                    disabled
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40
-                               px-3 py-2 text-gray-600 dark:text-slate-300"
-                    value={form.street || ''}
-                    readOnly
-                  />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-                <Field label="Bairro" className="sm:col-span-2">
-                  <input
-                    disabled
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40
-                               px-3 py-2 text-gray-600 dark:text-slate-300"
-                    value={form.district || ''}
-                    readOnly
-                  />
-                </Field>
-                <Field label="Cidade" className="sm:col-span-3">
-                  <input
-                    disabled
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40
-                               px-3 py-2 text-gray-600 dark:text-slate-300"
-                    value={form.city || ''}
-                    readOnly
-                  />
-                </Field>
-                <Field label="UF" className="sm:col-span-1">
-                  <input
-                    disabled
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40
-                               px-3 py-2 text-gray-600 dark:text-slate-300"
-                    value={(form.state || '').toUpperCase()}
-                    readOnly
-                  />
-                </Field>
-              </div>
             </div>
-          )}
+          </div>
+        )}
+
+        {/* divisor sutil */}
+        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
+
+        {/* Contato */}
+        <SectionTitle
+          icon={<Phone />}
+          title="Contato"
+          desc="Telefone fixo/celular e WhatsApp da loja (DDD + número)."
+        />
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Telefone (DDD + número)" hint="Ex.: (11) 3456-7890 ou (11) 93456-7890">
+            <input
+              inputMode="tel"
+              autoComplete="tel"
+              pattern="\d{10,11}"
+              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                         px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              placeholder="(11) 3456-7890 ou (11) 93456-7890"
+              value={formatBrPhone(form.phone)}
+              onChange={(e) => setLocal('phone', e.target.value)}
+              onBlur={(e) => setLocal('phone', normalizeBrPhoneDigits(e.target.value))}
+            />
+          </Field>
+
+          <Field label="WhatsApp (DDD + número)" hint="Somente dígitos; usaremos o link com wa.me">
+            <input
+              inputMode="tel"
+              autoComplete="tel-national"
+              pattern="\d{10,11}"
+              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                         px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                         focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+              placeholder="(11) 98765-4321"
+              value={formatBrPhone(form.whatsapp)}
+              onChange={(e) => setLocal('whatsapp', e.target.value)}
+              onBlur={(e) => setLocal('whatsapp', normalizeBrPhoneDigits(e.target.value))}
+            />
+          </Field>
         </div>
 
+        {/* divisor sutil */}
+        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
+
         {/* Redes sociais */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <SectionTitle
+          title="Redes sociais"
+          desc="Cole a URL ou digite @usuário; nós limpamos automaticamente."
+        />
+
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Instagram (@user ou URL)">
             <input
               className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70

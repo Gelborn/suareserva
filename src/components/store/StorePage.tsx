@@ -15,14 +15,12 @@ import LoadingScreen from "../../components/ui/LoadingScreen";
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
-// Gera iniciais para fallback
 const getInitials = (name?: string | null) => {
   if (!name) return 'SR';
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() ?? '').join('') || 'SR';
 };
 
-// Ícone TikTok custom (leve)
 const TikTokIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg viewBox="0 0 24 24" aria-hidden="true" width="14" height="14" {...props}>
     <path
@@ -32,7 +30,6 @@ const TikTokIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-// Chip social (Instagram/TikTok)
 const SocialChip: React.FC<{
   icon: React.ReactNode;
   label: string;
@@ -75,7 +72,6 @@ const SocialChip: React.FC<{
   );
 };
 
-// Avatar da loja
 const StoreAvatar: React.FC<{ name?: string | null; logoUrl?: string | null }> = ({
   name,
   logoUrl,
@@ -106,7 +102,7 @@ const StoreAvatar: React.FC<{ name?: string | null; logoUrl?: string | null }> =
 
 const StorePage: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams(); // /stores/:id
+  const { id } = useParams();
   const { business } = useBusiness();
   const {
     loading,
@@ -121,7 +117,6 @@ const StorePage: React.FC = () => {
 
   const [active, setActive] = React.useState<TabKey>('overview');
 
-  // cores da loja
   const primary = (store as any)?.primary_color || '#6366f1';
   const secondary = (store as any)?.secondary_color || '#8b5cf6';
 
@@ -131,7 +126,7 @@ const StorePage: React.FC = () => {
 
   if (!store) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-sm text-amber-600">
+      <div className="max-w-6xl mx-auto px-2 sm:px-6 py-6 text-sm text-amber-600">
         Loja não encontrada.
         <div className="mt-4">
           <button
@@ -145,12 +140,17 @@ const StorePage: React.FC = () => {
     );
   }
 
-  // ✅ usa a coluna gerada no banco
   const addressOneLine: string | null = (store as any)?.address_one_line || null;
 
   return (
-    <div className="pb-10">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5">
+    <div
+      className="
+        min-h-screen
+        pb-[max(20px,env(safe-area-inset-bottom))]
+        sm:pb-10
+      "
+    >
+      <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-4">
         {/* Voltar */}
         <button
           onClick={() => navigate('/stores')}
@@ -161,12 +161,11 @@ const StorePage: React.FC = () => {
         </button>
 
         {/* Card principal */}
-        <div className="mt-2 bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-          {/* Header da loja */}
-          <div className="px-4 sm:px-6 pt-5 pb-4">
+        <div className="mt-2 bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="px-3 sm:px-6 pt-4 pb-3">
             <div className="flex items-start sm:items-center gap-4 sm:gap-5">
               <StoreAvatar name={store.name} logoUrl={(store as any).logo_url || null} />
-
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <h1
@@ -177,7 +176,6 @@ const StorePage: React.FC = () => {
                     {store.name || 'Configurar Loja'}
                   </h1>
                 </div>
-
                 <p className="mt-1 text-sm text-gray-700 dark:text-slate-300 truncate">
                   {addressOneLine || (
                     <span className="text-gray-400 dark:text-slate-500">
@@ -185,7 +183,6 @@ const StorePage: React.FC = () => {
                     </span>
                   )}
                 </p>
-
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <SocialChip
                     icon={<Instagram className="w-3.5 h-3.5 opacity-90" />}
@@ -218,20 +215,19 @@ const StorePage: React.FC = () => {
                 services: completion.filledServices,
                 theme: completion.filledTheme,
               }}
-              className="px-4 sm:px-6"
+              className="px-2 sm:px-6"
             />
           </div>
         </div>
 
         {/* Conteúdo */}
-        <div className="mt-6 space-y-6">
+        <div className="mt-5 sm:mt-6 space-y-5 sm:space-y-6 px-1.5 sm:px-0">
           {active === 'overview' && (
             <OverviewTab
               storeId={store.id}
               info={{
                 name: store.name,
                 slug: store.slug || '',
-                // 👇 agora vindo dos campos granulares
                 street: (store as any).street || '',
                 number: (store as any).number || '',
                 district: (store as any).district || '',
@@ -267,7 +263,6 @@ const StorePage: React.FC = () => {
                 updateStore({
                   name: v.name,
                   slug: v.slug || null,
-                  // 👇 gravando nos campos top-level (o JSON address foi removido)
                   street: v.street || null,
                   number: v.number || null,
                   district: v.district || null,
