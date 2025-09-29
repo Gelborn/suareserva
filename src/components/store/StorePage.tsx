@@ -126,7 +126,7 @@ const StorePage: React.FC = () => {
 
   if (!store) {
     return (
-      <div className="max-w-6xl mx-auto px-2 sm:px-6 py-6 text-sm text-amber-600">
+      <div className="max-w-6xl mx-auto px-0 sm:px-6 py-6 text-sm text-amber-600">
         Loja não encontrada.
         <div className="mt-4">
           <button
@@ -150,18 +150,29 @@ const StorePage: React.FC = () => {
         sm:pb-10
       "
     >
-      <div className="max-w-6xl mx-auto px-2 sm:px-6 pt-4">
+      {/* px-0 no mobile = zero margem lateral; safe-area nos lados para iOS com notch */}
+      <div className="
+        max-w-6xl mx-auto
+        px-0 sm:px-6 pt-4
+        pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]
+      ">
         {/* Voltar */}
         <button
           onClick={() => navigate('/stores')}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 dark:hover:text-slate-100"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 dark:hover:text-slate-100 px-3 sm:px-0"
         >
           <ChevronLeft className="w-4 h-4" />
           Voltar
         </button>
 
-        {/* Card principal */}
-        <div className="mt-2 bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-sm overflow-hidden">
+        {/* Card principal — colado nas laterais no mobile */}
+        <div className="
+          mt-2
+          bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800
+          rounded-none sm:rounded-2xl
+          shadow-sm overflow-hidden
+          border-l-0 border-r-0 sm:border-l sm:border-r
+        ">
           {/* Header */}
           <div className="px-3 sm:px-6 pt-4 pb-3">
             <div className="flex items-start sm:items-center gap-4 sm:gap-5">
@@ -203,7 +214,7 @@ const StorePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Tabs */}
+          {/* Tabs — full bleed no mobile */}
           <div className="border-t border-gray-200/70 dark:border-slate-800">
             <Tabs
               value={active}
@@ -215,123 +226,140 @@ const StorePage: React.FC = () => {
                 services: completion.filledServices,
                 theme: completion.filledTheme,
               }}
-              className="px-2 sm:px-6"
+              className="px-2 sm:px-6 -mx-0" // já está sem padding lateral da página
             />
           </div>
         </div>
 
-        {/* Conteúdo */}
-        <div className="mt-5 sm:mt-6 space-y-5 sm:space-y-6 px-1.5 sm:px-0">
+        {/* Conteúdo — full bleed no mobile */}
+        <div
+          className="
+            mt-5 sm:mt-6 space-y-5 sm:space-y-6
+            mx-0 sm:mx-auto
+            px-0 sm:px-0
+            [&>*]:mx-0
+          "
+        >
           {active === 'overview' && (
-            <OverviewTab
-              storeId={store.id}
-              info={{
-                name: store.name,
-                slug: store.slug || '',
-                street: (store as any).street || '',
-                number: (store as any).number || '',
-                district: (store as any).district || '',
-                city: (store as any).city || '',
-                state: (store as any).state || '',
-                zip: (store as any).zip || '',
-                instagram: (store as any).instagram_url || '',
-                tiktok: (store as any).tiktok_url || '',
-              }}
-              logoUrl={(store as any).logo_url || null}
-              primary={primary}
-              secondary={secondary}
-              completeness={completion}
-              goTo={(t) => setActive(t)}
-            />
+            <div className="rounded-none sm:rounded-2xl sm:border sm:border-gray-200/70 sm:dark:border-slate-800 sm:overflow-hidden">
+              <OverviewTab
+                storeId={store.id}
+                info={{
+                  name: store.name,
+                  slug: store.slug || '',
+                  street: (store as any).street || '',
+                  number: (store as any).number || '',
+                  district: (store as any).district || '',
+                  city: (store as any).city || '',
+                  state: (store as any).state || '',
+                  zip: (store as any).zip || '',
+                  instagram: (store as any).instagram_url || '',
+                  tiktok: (store as any).tiktok_url || '',
+                }}
+                logoUrl={(store as any).logo_url || null}
+                primary={primary}
+                secondary={secondary}
+                completeness={completion}
+                goTo={(t) => setActive(t)}
+              />
+            </div>
           )}
 
           {active === 'info' && (
-            <InfoTab
-              value={{
-                name: store.name,
-                slug: store.slug || '',
-                street: (store as any).street || '',
-                number: (store as any).number || '',
-                district: (store as any).district || '',
-                city: (store as any).city || '',
-                state: (store as any).state || '',
-                zip: (store as any).zip || '',
-                instagram: (store as any).instagram_url || '',
-                tiktok: (store as any).tiktok_url || '',
-              }}
-              onChange={(v) =>
-                updateStore({
-                  name: v.name,
-                  slug: v.slug || null,
-                  street: v.street || null,
-                  number: v.number || null,
-                  district: v.district || null,
-                  city: v.city || null,
-                  state: v.state || null,
-                  zip: v.zip || null,
-                  instagram_url: v.instagram || null,
-                  tiktok_url: v.tiktok || null,
-                })
-              }
-            />
+            <div className="rounded-none sm:rounded-2xl sm:border sm:border-gray-200/70 sm:dark:border-slate-800 sm:overflow-hidden">
+              <InfoTab
+                value={{
+                  name: store.name,
+                  slug: store.slug || '',
+                  street: (store as any).street || '',
+                  number: (store as any).number || '',
+                  district: (store as any).district || '',
+                  city: (store as any).city || '',
+                  state: (store as any).state || '',
+                  zip: (store as any).zip || '',
+                  instagram: (store as any).instagram_url || '',
+                  tiktok: (store as any).tiktok_url || '',
+                }}
+                onChange={(v) =>
+                  updateStore({
+                    name: v.name,
+                    slug: v.slug || null,
+                    street: v.street || null,
+                    number: v.number || null,
+                    district: v.district || null,
+                    city: v.city || null,
+                    state: v.state || null,
+                    zip: v.zip || null,
+                    instagram_url: v.instagram || null,
+                    tiktok_url: v.tiktok || null,
+                  })
+                }
+              />
+            </div>
           )}
 
           {active === 'hours' && (
-            <HoursTab
-              hours={hours}
-              onChangeHours={(next) => upsertHours(next)}
-              slotMin={store.slot_duration_min}
-              bufferMin={store.buffer_before_min}
-              onChangeSlot={(n) => updateStore({ slot_duration_min: n })}
-              onChangeBuffer={(n) => updateStore({ buffer_before_min: n })}
-            />
+            <div className="rounded-none sm:rounded-2xl sm:border sm:border-gray-200/70 sm:dark:border-slate-800 sm:overflow-hidden">
+              <HoursTab
+                hours={hours}
+                onChangeHours={(next) => upsertHours(next)}
+                slotMin={store.slot_duration_min}
+                bufferMin={store.buffer_before_min}
+                onChangeSlot={(n) => updateStore({ slot_duration_min: n })}
+                onChangeBuffer={(n) => updateStore({ buffer_before_min: n })}
+              />
+            </div>
           )}
 
           {active === 'services' && (
-            <ServicesTab
-              services={services.map((s) => ({
-                id: s.id,
-                name: s.name,
-                minutes: s.duration_min,
-                price: Math.round(s.price_cents / 100),
-              }))}
-              onChange={(list) =>
-                saveServices(
-                  list.map((x) => ({
-                    id: x.id,
-                    name: x.name,
-                    duration_min: x.minutes,
-                    price_cents: Math.round((x.price ?? 0) * 100),
-                    is_active: true,
-                  }))
-                )
-              }
-            />
+            <div className="rounded-none sm:rounded-2xl sm:border sm:border-gray-200/70 sm:dark:border-slate-800 sm:overflow-hidden">
+              <ServicesTab
+                services={services.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  minutes: s.duration_min,
+                  price: Math.round(s.price_cents / 100),
+                }))}
+                onChange={(list) =>
+                  saveServices(
+                    list.map((x) => ({
+                      id: x.id,
+                      name: x.name,
+                      duration_min: x.minutes,
+                      price_cents: Math.round((x.price ?? 0) * 100),
+                      is_active: true,
+                    }))
+                  )
+                }
+              />
+            </div>
           )}
 
           {active === 'theme' && (
-            <ThemeTab
-              info={{
-                name: store.name,
-                slug: store.slug || '',
-                street: (store as any).street || '',
-                number: (store as any).number || '',
-                district: (store as any).district || '',
-                city: (store as any).city || '',
-                state: (store as any).state || '',
-                zip: (store as any).zip || '',
-                instagram: (store as any).instagram_url || '',
-                tiktok: (store as any).tiktok_url || '',
-              }}
-              primary={primary}
-              secondary={secondary}
-              onPrimary={(v) => updateStore({ primary_color: v })}
-              onSecondary={(v) => updateStore({ secondary_color: v })}
-              logoUrl={(store as any).logo_url || null}
-              coverUrl={(store as any).cover_url || null}
-              onLogo={(url) => updateStore({ logo_url: url })}
-              onCover={(url) => updateStore({ cover_url: url })}
-            />
+            <div className="rounded-none sm:rounded-2xl sm:border sm:border-gray-200/70 sm:dark:border-slate-800 sm:overflow-hidden">
+              <ThemeTab
+                info={{
+                  name: store.name,
+                  slug: store.slug || '',
+                  street: (store as any).street || '',
+                  number: (store as any).number || '',
+                  district: (store as any).district || '',
+                  city: (store as any).city || '',
+                  state: (store as any).state || '',
+                  zip: (store as any).zip || '',
+                  instagram: (store as any).instagram_url || '',
+                  tiktok: (store as any).tiktok_url || '',
+                }}
+                primary={primary}
+                secondary={secondary}
+                onPrimary={(v) => updateStore({ primary_color: v })}
+                onSecondary={(v) => updateStore({ secondary_color: v })}
+                logoUrl={(store as any).logo_url || null}
+                coverUrl={(store as any).cover_url || null}
+                onLogo={(url) => updateStore({ logo_url: url })}
+                onCover={(url) => updateStore({ cover_url: url })}
+              />
+            </div>
           )}
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2 } from 'lucide-react';
+import { Building2, Phone } from 'lucide-react';
 
 import { useBusiness } from '../../hooks/useBusiness';
 import { useStores } from '../../hooks/useStores';
@@ -9,7 +9,7 @@ import CreateStoreModal from './components/CreateStoreModal';
 /* ---------------- UI helpers ---------------- */
 
 const Card: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ className = '', children }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/70 dark:border-gray-700/70 shadow-sm ${className}`}>
+  <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-gray-200/70 dark:border-gray-700/70 shadow-sm hover:shadow-md transition-shadow ${className}`}>
     {children}
   </div>
 );
@@ -53,19 +53,19 @@ const StatusBadge: React.FC<{ text: string; tone: BadgeTone }> = ({ text, tone }
   );
 };
 
-// Skeleton para estado de loading
+// Skeleton (mesma altura dos cards)
 const StoreSkeleton: React.FC = () => (
-  <Card className="p-5 animate-pulse">
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex items-start gap-3 w-full">
-        <div className="w-11 h-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
-        <div className="flex-1 space-y-2">
-          <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="h-4 w-56 rounded bg-gray-200 dark:bg-gray-700" />
-        </div>
+  <Card className="p-5 h-48 flex flex-col justify-between animate-pulse">
+    <div className="flex items-center gap-3">
+      <div className="w-11 h-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
+      <div className="min-w-0 flex-1">
+        <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
+        <div className="h-4 w-56 rounded bg-gray-200 dark:bg-gray-700 mb-1" />
+        <div className="h-4 w-36 rounded bg-gray-200 dark:bg-gray-700" />
       </div>
-      <div className="h-8 w-20 rounded-xl bg-gray-200 dark:bg-gray-700" />
+      <div className="h-6 w-16 rounded bg-gray-200 dark:bg-gray-700" />
     </div>
+    <div className="h-9 w-full sm:w-28 self-end rounded-xl bg-gray-200 dark:bg-gray-700" />
   </Card>
 );
 
@@ -87,11 +87,9 @@ const Stores: React.FC = () => {
     return created ? { id: created.id, name: created.name } : null;
   };
 
-  // Helpers de apresentação
   const addressOneLine = (s: any): string | null =>
     s?.address_one_line || [s?.street, s?.number].filter(Boolean).join(', ') || null;
 
-  // Regra resumida: nome + endereço => Ativa, senão Falta dados
   const statusInfo = (s: any): { text: string; tone: BadgeTone } => {
     const hasBasics = !!(s?.name && (s?.address_one_line || s?.street));
     return hasBasics ? { text: 'Ativa', tone: 'ok' } : { text: 'Falta dados', tone: 'warn' };
@@ -147,34 +145,44 @@ const Stores: React.FC = () => {
             const status = statusInfo(s);
 
             return (
-              <Card key={s.id} className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  {/* bloco principal: avatar + textos */}
-                  <div className="flex min-w-0 items-start gap-3">
-                    <StoreAvatar name={s.name} logoUrl={s.logo_url || null} />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-lg font-semibold truncate" title={s.name}>
-                          {s.name}
-                        </div>
-                        <StatusBadge text={status.text} tone={status.tone} />
+              <Card key={s.id} className="p-5 h-48 flex flex-col justify-between">
+                {/* 1ª linha: logo + nome + status */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <StoreAvatar name={s.name} logoUrl={s.logo_url || null} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div
+                        className="text-lg font-semibold break-words line-clamp-2"
+                        title={s.name}
+                      >
+                        {s.name}
                       </div>
-
-                      <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                        {addr || <span className="text-gray-400 dark:text-gray-500">Endereço não configurado</span>}
-                      </div>
+                      <StatusBadge text={status.text} tone={status.tone} />
+                    </div>
+                    {/* 2ª linha: endereço */}
+                    <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                      {addr || <span className="text-gray-400 dark:text-gray-500">Endereço não configurado</span>}
+                    </div>
+                    {/* 3ª linha: whatsapp */}
+                    <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1 mt-1">
+                      <Phone className="w-4 h-4 shrink-0 opacity-70" />
+                      {s.whatsapp ? (
+                        <span className="break-all">{s.whatsapp}</span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-gray-500">Sem número cadastrado</span>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  {/* ações */}
-                  <div className="shrink-0">
-                    <button
-                      onClick={() => navigate(`/stores/${s.id}`)}
-                      className="px-3 py-2 rounded-xl border hover:bg-gray-50 dark:hover:bg-gray-800 text-sm"
-                    >
-                      Ver loja
-                    </button>
-                  </div>
+                {/* CTA */}
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={() => navigate(`/stores/${s.id}`)}
+                    className="px-4 h-9 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium w-full sm:w-auto"
+                  >
+                    Ver loja
+                  </button>
                 </div>
               </Card>
             );

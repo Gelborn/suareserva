@@ -8,7 +8,7 @@ export type StoreForm = {
   name: string;
   slug?: string; // não exibido aqui
   street?: string; number?: string; district?: string; city?: string; state?: string; zip?: string;
-  phone?: string; whatsapp?: string;
+  whatsapp?: string;
   instagram?: string; tiktok?: string;
 };
 
@@ -20,6 +20,19 @@ const formatCep = (s: string) => {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 };
 
+// BR phone mask for display (10–11 digits)
+const formatBrPhone = (raw?: string) => {
+  const d = onlyDigits(raw || '').slice(0, 11);
+  if (d.length <= 2) return d;
+  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+};
+const normalizeBrPhoneDigits = (raw?: string) => {
+  const d = onlyDigits(raw || '');
+  return d ? d.slice(0, 11) : '';
+};
+
 // normaliza @handle e remove barra final se vier URL
 const normalizeHandle = (raw?: string) => {
   let s = (raw || '').trim();
@@ -29,22 +42,6 @@ const normalizeHandle = (raw?: string) => {
   s = s.replace(/^@+/, '@');
   s = s.replace(/\s+/g, '');
   return s;
-};
-
-// formata telefone BR de 10–11 dígitos para exibição
-const formatBrPhone = (raw?: string) => {
-  const d = onlyDigits(raw || '').slice(0, 11);
-  if (d.length <= 2) return d;
-  if (d.length <= 6) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
-  // 11 dígitos (celular com 9)
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-};
-
-// normaliza para salvar (apenas dígitos 10–11)
-const normalizeBrPhoneDigits = (raw?: string) => {
-  const d = onlyDigits(raw || '');
-  return d ? d.slice(0, 11) : '';
 };
 
 /* ── seção visual ────────────────────────────────────────── */
@@ -71,11 +68,19 @@ const InfoTab: React.FC<{
   const [form, setForm] = React.useState<StoreForm>(value);
   const [cepMasked, setCepMasked] = React.useState(formatCep(value.zip || ''));
   const [loadingCep, setLoadingCep] = React.useState(false);
+  const [addressEdit, setAddressEdit] = React.useState(false); // alterna modo editar endereço
   const numberRef = React.useRef<HTMLInputElement>(null);
+
+  // snapshot para detectar alterações (dirty)
+  const initialRef = React.useRef<StoreForm>(value);
 
   React.useEffect(() => {
     setForm(value);
     setCepMasked(formatCep(value.zip || ''));
+    initialRef.current = value;
+    // Se já tem endereço, começa fechado (exibir one-liner). Se não tem, aberto.
+    const hasAddress = !!(value.street || value.city || value.state);
+    setAddressEdit(!hasAddress);
   }, [value]);
 
   const setLocal = (k: keyof StoreForm, v: string) =>
@@ -135,29 +140,45 @@ const InfoTab: React.FC<{
       state: '',
       number: '',
     }));
+    setAddressEdit(true);
   };
+
+  const normalizedForCompare = (f: StoreForm) => ({
+    ...f,
+    whatsapp: normalizeBrPhoneDigits(f.whatsapp),
+    instagram: normalizeHandle(f.instagram),
+    tiktok: normalizeHandle(f.tiktok),
+    zip: formatCep(f.zip || ''),
+    state: (f.state || '').toUpperCase(),
+  });
+
+  const dirty = React.useMemo(() => {
+    const a = normalizedForCompare(form);
+    const b = normalizedForCompare(initialRef.current);
+    return JSON.stringify(a) !== JSON.stringify(b);
+  }, [form]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dirty) return;
     onChange({
       ...form,
       instagram: normalizeHandle(form.instagram),
       tiktok: normalizeHandle(form.tiktok),
       zip: formatCep(form.zip || ''),
       state: (form.state || '').toUpperCase(),
-      phone: normalizeBrPhoneDigits(form.phone),
       whatsapp: normalizeBrPhoneDigits(form.whatsapp),
     });
-    // sem toast de sucesso aqui (evita duplicidade com o pai)
+    // sem toast aqui (evita duplicidade)
   };
 
   return (
-    <Card className="p-5">
+    <Card className="p-5 relative">
       {/* Identidade */}
       <SectionTitle
         icon={<Info />}
         title="Identidade"
-        desc="Defina o nome e como sua loja será exibida."
+        desc="Defina o nome como sua loja será exibida."
       />
 
       <form onSubmit={handleSubmit} className="mt-5 space-y-10">
@@ -176,120 +197,17 @@ const InfoTab: React.FC<{
           <div className="hidden sm:block" />
         </div>
 
-        {/* divisor sutil */}
-        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
+        {/* separador visível no dark */}
+        <div className="border-t border-gray-200 dark:border-slate-700/80" />
 
-        {/* Endereço */}
-        <SectionTitle
-          icon={<MapPin />}
-          title="Endereço"
-          desc="Busque pelo CEP e informe apenas o número."
-        />
-
-        {/* CEP + botão (desktop não quebra linha) */}
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-[160px_1fr_auto] gap-3">
-          <Field label="CEP">
-            <input
-              inputMode="numeric"
-              autoComplete="postal-code"
-              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
-                         px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-              placeholder="00000-000"
-              value={cepMasked}
-              onChange={(e) => {
-                const m = formatCep(e.target.value);
-                setCepMasked(m);
-                setLocal('zip', m); // estado local
-              }}
-            />
-          </Field>
-
-          <div className="hidden sm:flex items-end text-xs text-gray-500 dark:text-slate-500">
-            Digite o CEP e clique em “Carregar endereço”.
-          </div>
-
-          <div className="self-end">
-            <button
-              type="button"
-              onClick={handleLoadAddress}
-              disabled={loadingCep || onlyDigits(cepMasked).length !== 8}
-              className="min-w-[170px] whitespace-nowrap inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl
-                         border border-gray-200 dark:border-slate-700
-                         bg-gray-50 hover:bg-gray-100 dark:bg-slate-900/70 dark:hover:bg-slate-800
-                         text-gray-800 dark:text-slate-200 text-sm font-medium transition disabled:opacity-50"
-            >
-              {loadingCep ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Carregar endereço
-            </button>
-          </div>
-        </div>
-
-        {/* One-liner + Número */}
-        {hasLoadedAddress && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm
-                            text-gray-800 dark:text-slate-100">
-              {oneLiner || '—'}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-              <Field label="Número" className="sm:col-span-2">
-                <input
-                  ref={numberRef}
-                  className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
-                             px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-                  value={form.number || ''}
-                  onChange={(e) => setLocal('number', e.target.value)}
-                />
-              </Field>
-
-              <div className="sm:col-span-4 flex items-end">
-                <button
-                  type="button"
-                  onClick={handleClearAddress}
-                  className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm
-                             border border-gray-200 dark:border-slate-700
-                             text-gray-700 dark:text-slate-200
-                             hover:bg-gray-50 dark:hover:bg-slate-800 transition"
-                  title="Limpar endereço"
-                >
-                  <X className="w-4 h-4" />
-                  Limpar endereço
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* divisor sutil */}
-        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
-
-        {/* Contato */}
+        {/* Contato (WhatsApp logo após Identidade) */}
         <SectionTitle
           icon={<Phone />}
           title="Contato"
-          desc="Telefone fixo/celular e WhatsApp da loja (DDD + número)."
+          desc="WhatsApp da loja (DDD + número)."
         />
-
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Telefone (DDD + número)" hint="Ex.: (11) 3456-7890 ou (11) 93456-7890">
-            <input
-              inputMode="tel"
-              autoComplete="tel"
-              pattern="\d{10,11}"
-              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
-                         px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-              placeholder="(11) 3456-7890 ou (11) 93456-7890"
-              value={formatBrPhone(form.phone)}
-              onChange={(e) => setLocal('phone', e.target.value)}
-              onBlur={(e) => setLocal('phone', normalizeBrPhoneDigits(e.target.value))}
-            />
-          </Field>
-
-          <Field label="WhatsApp (DDD + número)" hint="Somente dígitos; usaremos o link com wa.me">
+          <Field label="WhatsApp (DDD + número)" hint="Somente dígitos; usamos isso para link wa.me">
             <input
               inputMode="tel"
               autoComplete="tel-national"
@@ -303,17 +221,134 @@ const InfoTab: React.FC<{
               onBlur={(e) => setLocal('whatsapp', normalizeBrPhoneDigits(e.target.value))}
             />
           </Field>
+          <div className="hidden sm:block" />
         </div>
 
-        {/* divisor sutil */}
-        <div className="h-px w-full bg-gray-200 dark:bg-slate-800" />
+        {/* separador */}
+        <div className="border-t border-gray-200 dark:border-slate-700/80" />
 
-        {/* Redes sociais */}
+        {/* Endereço */}
+        <SectionTitle
+          icon={<MapPin />}
+          title="Endereço"
+          desc="Busque pelo CEP e informe apenas o número."
+        />
+
+        {/* Modo exibição: one-liner + Alterar */}
+        {!addressEdit && hasLoadedAddress && (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm
+                            text-gray-800 dark:text-slate-100">
+              {oneLiner || '—'}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setAddressEdit(true)}
+                className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm
+                           border border-gray-200 dark:border-slate-700
+                           text-gray-700 dark:text-slate-200
+                           hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+              >
+                Alterar endereço
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAddress}
+                className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm
+                           border border-gray-200 dark:border-slate-700
+                           text-gray-700 dark:text-slate-200
+                           hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+                title="Limpar endereço"
+              >
+                <X className="w-4 h-4" />
+                Limpar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modo edição: CEP + Buscar CEP + Número */}
+        {(addressEdit || !hasLoadedAddress) && (
+          <div className="mt-4 space-y-4">
+            {/* CEP + botão lado a lado no desktop */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3">
+              <Field label="CEP">
+                <div className="flex gap-2">
+                  <input
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                               px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                               focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+                    placeholder="00000-000"
+                    value={cepMasked}
+                    onChange={(e) => {
+                      const m = formatCep(e.target.value);
+                      setCepMasked(m);
+                      setLocal('zip', m); // estado local
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLoadAddress}
+                    disabled={loadingCep || onlyDigits(cepMasked).length !== 8}
+                    className="min-w-[140px] whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl
+                               border border-gray-200 dark:border-slate-700
+                               bg-gray-50 hover:bg-gray-100 dark:bg-slate-900/70 dark:hover:bg-slate-800
+                               text-gray-800 dark:text-slate-200 text-sm font-medium transition disabled:opacity-50"
+                  >
+                    {loadingCep ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    Buscar CEP
+                  </button>
+                </div>
+              </Field>
+            </div>
+
+            {/* Após buscar, mostra one-liner de preview e campo Número */}
+            {hasLoadedAddress && (
+              <>
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm
+                                text-gray-800 dark:text-slate-100">
+                  {oneLiner || '—'}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <Field label="Número" className="sm:col-span-1">
+                    <input
+                      ref={numberRef}
+                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
+                                 px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
+                                 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+                      value={form.number || ''}
+                      onChange={(e) => setLocal('number', e.target.value)}
+                    />
+                  </Field>
+                  <div className="sm:col-span-3 flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => setAddressEdit(false)}
+                      className="inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm
+                                 border border-gray-200 dark:border-slate-700
+                                 text-gray-700 dark:text-slate-200
+                                 hover:bg-gray-50 dark:hover:bg-slate-800 transition"
+                    >
+                      Fechar edição
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* separador */}
+        <div className="border-t border-gray-200 dark:border-slate-700/80" />
+
+        {/* Redes sociais (opcional manter) */}
         <SectionTitle
           title="Redes sociais"
           desc="Cole a URL ou digite @usuário; nós limpamos automaticamente."
         />
-
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Instagram (@user ou URL)">
             <input
@@ -339,15 +374,34 @@ const InfoTab: React.FC<{
           </Field>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-2">
+        {/* BOTÃO SALVAR (desktop / quando não estiver usando o flutuante) */}
+        <div className="hidden sm:flex items-center justify-end gap-3 pt-2">
           <button
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 disabled:opacity-50"
             type="submit"
+            disabled={!dirty}
           >
             Salvar dados
           </button>
         </div>
+
+        {/* Floating Save (mobile & também disponível no desktop se quiser) */}
+        {dirty && (
+          <div className="sm:hidden">
+            <div className="fixed bottom-6 inset-x-0 px-4 z-40 pointer-events-none">
+              <div className="pointer-events-auto max-w-md mx-auto">
+                <button
+                  onClick={handleSubmit as any}
+                  className="w-full shadow-lg rounded-full px-5 py-3 bg-indigo-600 text-white font-semibold
+                             hover:bg-indigo-700 active:scale-[0.99] transition"
+                >
+                  Salvar dados
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </form>
     </Card>
   );
