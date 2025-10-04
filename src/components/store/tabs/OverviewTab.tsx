@@ -53,6 +53,8 @@ const OverviewTab: React.FC<{
     allGood: false,
   });
   const [cmpLoading, setCmpLoading] = React.useState(true);
+  // ✅ evita “flash” mantendo a tela final enquanto revalida
+  const [optimisticActive, setOptimisticActive] = React.useState(false);
 
   const loadStatus = React.useCallback(async () => {
     try {
@@ -72,6 +74,7 @@ const OverviewTab: React.FC<{
       setCmp({ filledInfo: false, filledHours: false, filledServices: false, allGood: false });
     } finally {
       setCmpLoading(false);
+      setOptimisticActive(false); // encerra o modo otimista após revalidação
     }
   }, [storeId]);
 
@@ -162,12 +165,13 @@ const OverviewTab: React.FC<{
     if (!s || status !== 'ok' || s === savedSlug) return;
     try {
       await saveSlug(s);
-      setSavedSlug(s);
+      setSavedSlug(s);            // reflete imediatamente
       setEditingSlug(false);
-      toast.success('Link salvo!');
+      // 🔇 sem toast aqui para evitar duplicidade; deixe o do updateStore (pai)
       fireConfetti();
-      loadStatus();
-      onSlugChanged?.(s);
+      setOptimisticActive(true);  // mantém a tela final enquanto revalida
+      loadStatus();               // revalida status
+      onSlugChanged?.(s);         // pai atualiza header / salva silencioso
       try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
     } catch (err:any) {
       toast.error(err?.message || 'Erro ao salvar.');
@@ -214,6 +218,7 @@ const OverviewTab: React.FC<{
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(publicUrl);
+      // mantive um toast aqui porque é uma ação distinta do usuário
       toast.success('Link copiado!');
     } catch {
       const input = document.createElement('input');
@@ -282,8 +287,8 @@ const OverviewTab: React.FC<{
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-start-1 lg:col-span-3 p-5">
-        {/* Modo edição isolado */}
         {editingSlug ? (
+          /* — EDIÇÃO ISOLADA — */
           <div className={inner}>
             <div className="rounded-2xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 sm:p-5">
               <h4 className="text-base sm:text-lg font-semibold text-indigo-900 dark:text-indigo-200">Editar link da loja</h4>
@@ -332,8 +337,8 @@ const OverviewTab: React.FC<{
           </div>
         ) : (
           <>
-            {/* FINAL ATIVO + COM SLUG */}
-            {!cmpLoading && cmp.allGood && savedSlug ? (
+            {/* FINAL ATIVO + COM SLUG (sem flash graças ao optimisticActive) */}
+            {((optimisticActive || (!cmpLoading && cmp.allGood)) && savedSlug) ? (
               <div className={inner + ' space-y-6'}>
                 <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 sm:p-5">
                   <div className="flex items-start gap-3">
@@ -397,11 +402,10 @@ const OverviewTab: React.FC<{
               </div>
             ) : (
               <>
-                {/* NOVA REGRA: ativo mas sem slug => mostra SÓ o bloco de slug */}
+                {/* ativo mas sem slug => só editor de slug */}
                 {!cmpLoading && cmp.allGood && !savedSlug ? (
                   SlugEditorBlock
                 ) : (
-                  /* Caso contrário: checklist + slug */
                   <>
                     <div className={inner + ' flex items-start'}>
                       <div className="flex-1">
