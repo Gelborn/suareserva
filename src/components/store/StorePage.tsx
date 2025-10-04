@@ -190,23 +190,24 @@ const StorePage: React.FC = () => {
 
         {/* Card principal */}
         <div className="mt-2 bg-white dark:bg-slate-900/95 border border-gray-200/70 dark:border-slate-800 rounded-none sm:rounded-2xl shadow-sm overflow-hidden border-l-0 border-r-0 sm:border-l sm:border-r">
-          {/* Header */}
+          {/* Header (ajustado) */}
           <div className="px-3 sm:px-6 pt-4 pb-3">
             <div className="flex items-start sm:items-center gap-4 sm:gap-5">
               <StoreAvatar name={store.name} logoUrl={(store as any).logo_url || null} />
+
               <div className="min-w-0 flex-1">
+                {/* Título: preto/branco, quebra de linha no mobile, menor no mobile */}
                 <div className="flex items-center gap-2">
                   <h1
-                    className="text-2xl sm:text-3xl font-bold tracking-tight truncate"
-                    style={{ color: primary }}
+                    className="text-[17px] sm:text-3xl font-semibold leading-tight text-gray-900 dark:text-slate-100 break-words"
                     title={store.name || 'Configurar Loja'}
                   >
                     {store.name || 'Configurar Loja'}
                   </h1>
                 </div>
 
-                {/* Endereço */}
-                <p className="mt-1 text-sm text-gray-700 dark:text-slate-300 truncate">
+                {/* Endereço: menor no mobile, sem truncate (quebra natural) */}
+                <p className="mt-1 text-[13px] sm:text-sm text-gray-700 dark:text-slate-300 whitespace-normal">
                   {addressOneLine || (
                     <span className="text-gray-400 dark:text-slate-500">
                       Loja sem endereço cadastrado
@@ -214,33 +215,44 @@ const StorePage: React.FC = () => {
                   )}
                 </p>
 
-                {/* Linha com slug e WhatsApp */}
+                {/* Linha com slug (opcional) */}
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                   {store.slug && (
                     <div className="inline-flex items-center gap-1">
-                      {/* pequeno ícone via emoji para manter consistência de altura com o chip */}
                       <span className="opacity-70">🔗</span>
                       <span>suareserva.online/{store.slug}</span>
                     </div>
                   )}
+                </div>
 
-                  {waHref && waLabel && (
+                {/* Social + WhatsApp: mesmo tamanho/estilo, todos em uma linha */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* WhatsApp chip — idêntico ao SocialChip */}
+                  {waHref && waLabel ? (
                     <a
                       href={waHref}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border border-emerald-200/70 text-emerald-700
-                                 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-700/60 dark:text-emerald-300 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/40 transition"
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs
+                                 border border-gray-200 dark:border-slate-800
+                                 text-gray-700 dark:text-slate-200
+                                 hover:bg-gray-50 dark:hover:bg-white/5 transition"
                       title={`WhatsApp ${waLabel}`}
                     >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>{waLabel}</span>
+                      <Phone className="w-3.5 h-3.5 opacity-90" />
+                      <span className="truncate">{waLabel}</span>
                     </a>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs
+                                 border border-dashed border-gray-200 dark:border-slate-800
+                                 text-gray-400 dark:text-slate-400 select-none"
+                    >
+                      <Phone className="w-3.5 h-3.5 opacity-70" />
+                      <span className="truncate">sem WhatsApp</span>
+                    </span>
                   )}
-                </div>
 
-                {/* Social */}
-                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <SocialChip
                     icon={<Instagram className="w-3.5 h-3.5 opacity-90" />}
                     label="Instagram"

@@ -276,7 +276,7 @@ const HoursTab: React.FC<{
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
           {/* ícone branco no dark */}
-          <Clock className="w-5 h-5 text-gray-700 dark:text-white" />
+          <Clock className="w-5 h-5 text-gray-700 dark:stroke-white dark:text-white" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Horário de funcionamento</h3>
