@@ -47,6 +47,16 @@ export type ServiceRow = {
   updated_at?: string;
 };
 
+/** ---------- Tipos de status (RPC) ---------- */
+export type StoreStatusRow = {
+  store_id: string;
+  has_general_info: boolean;
+  has_hours: boolean;
+  has_services: boolean;
+  status: 'active' | 'hasDependencies' | string;
+};
+type StoreStatusMap = Record<string, StoreStatusRow | undefined>;
+
 /** ---------- Utils ---------- */
 const defaultHoursRows = (storeId: string): StoreHourRow[] =>
   Array.from({ length: 7 }, (_, i) => ({
@@ -59,10 +69,15 @@ const defaultHoursRows = (storeId: string): StoreHourRow[] =>
 
 /** ======================================================================
  * useStores — lista lojas do business e cria uma nova com horas default
+ * + integra status via RPC batch (store_status_batch)
  * =====================================================================*/
 export function useStores(businessId?: string) {
   const [loading, setLoading] = useState(true);
   const [stores, setStores] = useState<StoreRow[]>([]);
+  const [storeStatuses, setStoreStatuses] = useState<StoreStatusMap>({});
+  const [loadingStatuses, setLoadingStatuses] = useState(false);
+
+  const storeIds = useMemo(() => stores.map((s) => s.id).filter(Boolean), [stores]);
 
   const fetchStores = useCallback(async () => {
     if (!businessId) return;
@@ -83,9 +98,61 @@ export function useStores(businessId?: string) {
     }
   }, [businessId]);
 
+  /** Busca statuses em batch usando o RPC 0009 (store_status_batch) */
+  const refreshStatuses = useCallback(async (ids?: string[]) => {
+    const target = (ids && ids.length ? ids : storeIds).filter(Boolean);
+    if (target.length === 0) {
+      setStoreStatuses({});
+      return;
+    }
+    setLoadingStatuses(true);
+    try {
+      const { data, error } = await supabase.rpc('store_status_batch', { p_store_ids: target });
+      if (error || !Array.isArray(data)) {
+        // marca como dependente em caso de erro/RLS
+        const fallback: StoreStatusMap = {};
+        for (const id of target) {
+          fallback[id] = {
+            store_id: id,
+            has_general_info: false,
+            has_hours: false,
+            has_services: false,
+            status: 'hasDependencies',
+          };
+        }
+        setStoreStatuses((prev) => ({ ...prev, ...fallback }));
+        return;
+      }
+      const next: StoreStatusMap = {};
+      for (const row of data as StoreStatusRow[]) next[row.store_id] = row;
+      setStoreStatuses((prev) => ({ ...prev, ...next }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingStatuses(false);
+    }
+  }, [storeIds]);
+
+  // carrega lojas e, depois, statuses
   useEffect(() => {
     fetchStores();
   }, [fetchStores]);
+
+  useEffect(() => {
+    if (storeIds.length) refreshStatuses(storeIds);
+    else setStoreStatuses({});
+  }, [storeIds, refreshStatuses]);
+
+  /** Helpers para consumo externo */
+  const getStatus = useCallback(
+    (storeId: string): StoreStatusRow | undefined => storeStatuses[storeId],
+    [storeStatuses]
+  );
+
+  const isActive = useCallback(
+    (storeId: string) => getStatus(storeId)?.status === 'active',
+    [getStatus]
+  );
 
   const createStoreWithDefaults = useCallback(
     async (payload: Partial<StoreRow> = {}) => {
@@ -131,16 +198,30 @@ export function useStores(businessId?: string) {
 
       toast.success('Loja criada!');
       await fetchStores();
+      // 3) atualiza status só da nova store (sem esperar novo render)
+      await refreshStatuses([store.id]);
+
       return store as StoreRow;
     },
-    [businessId, fetchStores]
+    [businessId, fetchStores, refreshStatuses]
   );
 
-  return { loading, stores, fetchStores, createStoreWithDefaults };
+  return {
+    loading,
+    loadingStatuses,
+    stores,
+    storeStatuses,
+    fetchStores,
+    refreshStatuses,
+    getStatus,
+    isActive,
+    createStoreWithDefaults,
+  };
 }
 
 /** ======================================================================
  * useStore — detalhe: store + hours + services, com mutações
+ * (inalterado; pode-se integrar RPC de status individual no futuro)
  * =====================================================================*/
 export function useStore(storeId?: string, businessId?: string) {
   const [loading, setLoading] = useState(true);

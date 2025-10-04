@@ -1,3 +1,4 @@
+// src/pages/stores/Stores.tsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Phone } from 'lucide-react';
@@ -74,7 +75,15 @@ const StoreSkeleton: React.FC = () => (
 const Stores: React.FC = () => {
   const navigate = useNavigate();
   const { business } = useBusiness();
-  const { loading, stores, createStoreWithDefaults } = useStores(business?.id);
+
+  // ✅ usa useStores integrado com batch RPC
+  const {
+    loading,
+    stores,
+    createStoreWithDefaults,
+    getStatus,
+    isActive,
+  } = useStores(business?.id);
 
   const [openModal, setOpenModal] = useState(false);
   const empty = useMemo(() => !loading && stores.length === 0, [loading, stores]);
@@ -91,15 +100,22 @@ const Stores: React.FC = () => {
     s?.address_one_line || [s?.street, s?.number].filter(Boolean).join(', ') || null;
 
   const statusInfo = (s: any): { text: string; tone: BadgeTone } => {
-    const hasBasics = !!(s?.name && (s?.address_one_line || s?.street));
-    return hasBasics ? { text: 'Ativa', tone: 'ok' } : { text: 'Falta dados', tone: 'warn' };
+    const st = getStatus(s.id);
+    if (!st) {
+      // enquanto carrega status do RPC
+      const hasBasics = !!(s?.name && (s?.address_one_line || s?.street));
+      return hasBasics ? { text: 'Checando…', tone: 'ok' } : { text: 'Checando…', tone: 'warn' };
+    }
+    return isActive(s.id)
+      ? { text: 'Ativa', tone: 'ok' }
+      : { text: 'Falta dados', tone: 'warn' };
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Lojas</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Lojas</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">Gerencie suas unidades/endereços.</p>
         </div>
 
@@ -121,10 +137,10 @@ const Stores: React.FC = () => {
         </div>
       ) : empty ? (
         <Card className="p-10 text-center">
-          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-indigo-100 text-indigo-700">
+          <div className="mx-auto w-12 h-12 grid place-items-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
             <Building2 className="w-6 h-6" />
           </div>
-          <h2 className="mt-4 text-2xl font-bold">Crie sua primeira loja</h2>
+          <h2 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">Crie sua primeira loja</h2>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Você vai configurar <strong>dados da loja</strong>, <strong>horários</strong>, <strong>serviços</strong> e a
             <strong> página pública</strong>.
@@ -152,7 +168,7 @@ const Stores: React.FC = () => {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <div
-                        className="text-lg font-semibold break-words line-clamp-2"
+                        className="text-lg font-semibold break-words line-clamp-2 text-gray-900 dark:text-white"
                         title={s.name}
                       >
                         {s.name}

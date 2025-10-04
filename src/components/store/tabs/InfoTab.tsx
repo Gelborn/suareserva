@@ -181,7 +181,8 @@ const InfoTab: React.FC<{
         desc="Defina o nome como sua loja será exibida."
       />
 
-      <form onSubmit={handleSubmit} className="mt-5 space-y-10">
+      {/* ✅ desabilita validação nativa para não travar com a máscara de telefone */}
+      <form onSubmit={handleSubmit} noValidate className="mt-5 space-y-10">
         {/* Nome */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Nome da loja">
@@ -211,7 +212,7 @@ const InfoTab: React.FC<{
             <input
               inputMode="tel"
               autoComplete="tel-national"
-              pattern="\d{10,11}"
+              // ❌ sem pattern para não conflitar com a máscara visual
               className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70
                          px-3 py-2 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500
                          focus:outline-none focus:ring-2 focus:ring-indigo-500/60"

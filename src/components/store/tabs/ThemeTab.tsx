@@ -1,7 +1,6 @@
 import React from 'react';
 import Card from '../components/Card';
 import Field from '../components/Field';
-import PublicHeader from '../components/PublicHeader';
 import { Palette, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { StoreForm } from './InfoTab';
@@ -69,23 +68,6 @@ const ThemeTab: React.FC<{
             Salvar personalização
           </button>
         </div>
-      </Card>
-
-      <Card className="p-5">
-        <PublicHeader
-          name={info.name || 'Studio Reserva'}
-          address={
-            (info.street || info.city || info.state || info.zip)
-              ? `${info.street || ''}${info.number ? `, ${info.number}` : ''} — ${info.district || ''} ${info.city ? `• ${info.city}` : ''}`
-              : 'Rua das Palmeiras, 120 — Centro'
-          }
-          slug={info.slug || 'sua-loja'}
-          primary={primary}
-          secondary={secondary}
-          logoUrl={logoUrl || undefined}
-          instagram={info.instagram}
-          tiktok={info.tiktok}
-        />
       </Card>
     </div>
   );
