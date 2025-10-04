@@ -1,74 +1,118 @@
 import React from 'react';
+import { CheckCircle2, AlertCircle, Copy, ExternalLink, Pencil } from 'lucide-react';
 import Card from '../components/Card';
-import Checklist from '../components/Checklist';
-import { CheckCircle2 } from 'lucide-react';
-import { TabKey } from '../components/Tabs';
 import toast from 'react-hot-toast';
-// ⚠️ Ajuste este import conforme seu projeto
 import { supabase } from '../../../lib/supabase';
-
 import type { StoreForm } from './InfoTab';
+import { TabKey } from '../components/Tabs';
 
-type Completeness = {
-  filledInfo: boolean;
-  filledHours: boolean;
-  filledServices: boolean;
-  filledTheme: boolean;
-  allGood: boolean;
-};
-
-type SlugCheckResult = { available: boolean; suggestion?: string };
+/* ──────────────── Helpers ──────────────── */
 
 const prettyUrl = (s?: string) =>
-  (s || '').toLowerCase()
+  (s || '')
+    .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+/* ──────────────── Types ──────────────── */
+
+type RpcStoreStatus = {
+  has_general_info: boolean;
+  has_hours: boolean;
+  has_services: boolean;
+  status: 'active' | 'hasDependencies' | string;
+};
+
+/* ──────────────── Component ──────────────── */
 
 const OverviewTab: React.FC<{
-  storeId: string;            // ✅ novo: necessário para salvar o slug
+  storeId: string;
   info: StoreForm;
-  logoUrl: string | null;     // compat
-  primary: string;            // —
-  secondary: string;          // —
-  completeness: Completeness;
+  logoUrl?: string | null;
+  primary?: string;
+  secondary?: string;
   goTo: (tab: TabKey) => void;
   domainBase?: string;
+  onSlugChanged?: (slug: string) => void;
 }> = ({
   storeId,
   info,
-  completeness,
+  logoUrl,
+  primary = '#6366f1',
+  secondary = '#8b5cf6',
   goTo,
   domainBase = 'suareserva.online',
+  onSlugChanged,
 }) => {
-  const steps = [
-    { ok: completeness.filledInfo,     label: 'Dados da loja',            tab: 'info' as TabKey },
-    { ok: completeness.filledHours,    label: 'Horário de funcionamento', tab: 'hours' as TabKey },
-    { ok: completeness.filledServices, label: 'Serviços',                 tab: 'services' as TabKey },
-    { ok: completeness.filledTheme,    label: 'Personalização',           tab: 'theme' as TabKey },
+  /* === Status via RPC === */
+  const [cmp, setCmp] = React.useState({
+    filledInfo: false,
+    filledHours: false,
+    filledServices: false,
+    allGood: false,
+  });
+  const [cmpLoading, setCmpLoading] = React.useState(true);
+
+  const loadStatus = React.useCallback(async () => {
+    try {
+      setCmpLoading(true);
+      const { data, error } = await supabase.rpc('store_status', { p_store_id: storeId });
+      if (error) throw error;
+      const r = (data || {}) as RpcStoreStatus;
+      setCmp({
+        filledInfo: !!r.has_general_info,
+        filledHours: !!r.has_hours,
+        filledServices: !!r.has_services,
+        allGood: r.status === 'active',
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error('Não foi possível carregar o status da loja.');
+      setCmp({ filledInfo: false, filledHours: false, filledServices: false, allGood: false });
+    } finally {
+      setCmpLoading(false);
+    }
+  }, [storeId]);
+
+  React.useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  /* === Opcional (personalização) === */
+  const optionalDone =
+    (logoUrl && logoUrl.trim() !== '') ||
+    primary.toLowerCase() !== '#6366f1' ||
+    secondary.toLowerCase() !== '#8b5cf6';
+
+  const required = [
+    { ok: cmp.filledInfo, label: 'Dados da loja', tab: 'info' as TabKey },
+    { ok: cmp.filledHours, label: 'Horário de funcionamento', tab: 'hours' as TabKey },
+    { ok: cmp.filledServices, label: 'Serviços', tab: 'services' as TabKey },
   ];
-  const total = steps.length;
-  const done  = steps.filter(s => s.ok).length;
+  const optional = { ok: optionalDone, label: 'Personalize sua loja', optional: true, tab: 'theme' as TabKey };
+
+  const total = required.length;
+  const done = required.filter(s => s.ok).length;
+
+  /* === Slug (auto-check com debounce) === */
+  const [savedSlug, setSavedSlug] = React.useState(info.slug || '');
+  const [editingSlug, setEditingSlug] = React.useState(false);
 
   const [slug, setSlug] = React.useState(info.slug || '');
   const [status, setStatus] = React.useState<'idle'|'checking'|'ok'|'taken'|'error'>('idle');
-  const [msg, setMsg] = React.useState<string>('');
+  const [msg, setMsg] = React.useState('');
 
   React.useEffect(() => {
-    setSlug(info.slug || '');
-    setStatus('idle');
-    setMsg('');
-  }, [info.slug]);
+    setSavedSlug(info.slug || '');
+    if (!editingSlug) {
+      setSlug(info.slug || '');
+      setStatus('idle'); setMsg('');
+    }
+  }, [info.slug, editingSlug]);
 
-  // ----- Supabase integration
-  const checkSlug = React.useCallback(async (raw: string): Promise<SlugCheckResult> => {
+  const checkSlug = React.useCallback(async (raw: string) => {
     const s = prettyUrl(raw);
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) return { available: false };
-    const { data, error } = await supabase
-      .from('stores')
-      .select('id')
-      .eq('slug', s)
-      .limit(1);
-
+    const { data, error } = await supabase.from('stores').select('id').eq('slug', s).limit(1);
     if (error) return { available: false };
     const available = !data || data.length === 0;
     return { available, suggestion: available ? undefined : `${s}-${Math.floor(Math.random()*900+100)}` };
@@ -76,152 +120,317 @@ const OverviewTab: React.FC<{
 
   const saveSlug = React.useCallback(async (raw: string) => {
     const s = prettyUrl(raw);
-    const { error } = await supabase
-      .from('stores')
-      .update({ slug: s })
-      .eq('id', storeId);
-
-    if (error) {
-      // 23505 = unique_violation (banco)
-      if ((error as any)?.code === '23505') throw new Error('Slug já está em uso.');
-      throw error;
-    }
+    const { error } = await supabase.from('stores').update({ slug: s }).eq('id', storeId);
+    if (error) throw error;
   }, [storeId]);
 
-  const handleCheck = async () => {
-    const s = prettyUrl(slug);
-    setSlug(s);
-    if (!s) { setStatus('error'); setMsg('Informe um slug válido.'); return; }
+  // debounce enquanto digita
+  React.useEffect(() => {
+    if (!editingSlug) return;
+    const raw = slug || '';
+    const s = prettyUrl(raw);
+
+    if (!raw.trim()) { setStatus('idle'); setMsg(''); return; }
+    if (s.length < 3) { setStatus('error'); setMsg('Mínimo de 3 caracteres.'); return; }
+    if (savedSlug && s === savedSlug) { setStatus('ok'); setMsg('Este já é o seu link.'); return; }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) { setStatus('error'); setMsg('Use letras/números e hífens.'); return; }
+
+    let cancelled = false;
+    setStatus('checking'); setMsg('');
+    const t = setTimeout(async () => {
+      try {
+        const res = await checkSlug(s);
+        if (cancelled) return;
+        if (res.available) { setStatus('ok'); setMsg('Disponível! 🙌'); }
+        else { setStatus('taken'); setMsg(res.suggestion ? `Já em uso. Sugestão: ${res.suggestion}` : 'Já em uso.'); }
+      } catch {
+        if (!cancelled) { setStatus('error'); setMsg('Erro ao verificar.'); }
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [slug, savedSlug, editingSlug, checkSlug]);
+
+  const fireConfetti = React.useCallback(async () => {
     try {
-      setStatus('checking'); setMsg('');
-      const res = await checkSlug(s);
-      if (res.available) { setStatus('ok'); setMsg('Disponível! 🙌'); }
-      else { setStatus('taken'); setMsg(res.suggestion ? `Já em uso. Sugestão: ${res.suggestion}` : 'Já em uso.'); }
-    } catch {
-      setStatus('error'); setMsg('Erro ao verificar.'); 
-    }
-  };
+      const confetti = (await import('canvas-confetti')).default;
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 }, ticks: 180, scalar: 0.9 });
+    } catch {}
+  }, []);
 
   const handleSave = async () => {
     const s = prettyUrl(slug);
-    if (!s) { toast.error('Informe um slug válido.'); return; }
-    if (status !== 'ok') {
-      // reforço: evita salvar sem checar/ok
-      const res = await checkSlug(s);
-      if (!res.available) { setStatus('taken'); setMsg(res.suggestion ? `Já em uso. Sugestão: ${res.suggestion}` : 'Já em uso.'); return; }
-    }
+    if (!s || status !== 'ok' || s === savedSlug) return;
     try {
       await saveSlug(s);
-      toast.success('Slug salvo!');
-      setStatus('ok');
-      setMsg('Disponível! 🙌');
+      setSavedSlug(s);
+      setEditingSlug(false);
+      toast.success('Link salvo!');
+      fireConfetti();
+      loadStatus();
+      onSlugChanged?.(s);
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
     } catch (err:any) {
-      toast.error(err?.message || 'Não foi possível salvar o slug.');
+      toast.error(err?.message || 'Erro ao salvar.');
     }
   };
 
-  const hasSlug = Boolean(info.slug);
-  const publicUrl = slug ? `https://${domainBase}/${slug}` : `https://${domainBase}/sua-loja`;
+  const publicUrl = savedSlug ? `https://${domainBase}/${savedSlug}` : `https://${domainBase}/sua-loja`;
+  const inner = 'w-full';
 
-  // container alinhado à esquerda (desktop) com respiro no mobile
-  const inner = 'mx-2 sm:mx-0 sm:max-w-2xl w-full';
+  /* === Checklist inline (compacto) === */
+  const Checklist = ({
+    items,
+  }: {
+    items: Array<{ ok: boolean; label: string; optional?: boolean; onClick: () => void }>;
+  }) => (
+    <div className="space-y-2 mt-4">
+      {items.map((it, i) => (
+        <button
+          key={i}
+          onClick={it.onClick}
+          className="w-full flex items-center justify-between p-3 rounded-xl border
+                     hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left
+                     border-gray-200 dark:border-slate-700"
+        >
+          <div className="flex items-center gap-3">
+            <div className={`w-6 h-6 rounded-full grid place-items-center ${it.ok ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}`}>
+              {it.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            </div>
+            <span className="text-sm text-gray-800 dark:text-slate-100 flex items-center gap-2">
+              {it.label}
+              {it.optional && (
+                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/70 dark:bg-indigo-900/40 px-1.5 py-0.5 rounded-md">
+                  opcional
+                </span>
+              )}
+            </span>
+          </div>
+          <span className="text-xs text-indigo-600 dark:text-indigo-400">ir →</span>
+        </button>
+      ))}
+    </div>
+  );
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success('Link copiado!');
+    } catch {
+      const input = document.createElement('input');
+      input.value = publicUrl;
+      document.body.appendChild(input);
+      input.select();
+      try { document.execCommand('copy'); toast.success('Link copiado!'); }
+      catch { toast.error('Não foi possível copiar.'); }
+      finally { document.body.removeChild(input); }
+    }
+  };
+
+  /* === UI blocks reutilizáveis === */
+  const SlugEditorBlock = (
+    <div className={inner + ' mt-0'}>
+      <div className="rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
+        <div className="text-sm text-indigo-900 dark:text-indigo-200">
+          {savedSlug ? 'Defina um novo link exclusivo (se quiser alterar).' : 'Sua loja está quase lá! Defina o link exclusivo abaixo.'}
+        </div>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+          <div className="flex items-center rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/70 px-3 py-2">
+            <span className="text-sm text-gray-500 dark:text-slate-400 mr-2">{domainBase}/</span>
+            <input
+              className="w-full bg-transparent outline-none text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
+              placeholder="sua-loja"
+              value={slug}
+              onChange={(e) => { setEditingSlug(true); setSlug(e.target.value); }}
+              onBlur={(e) => setSlug(prettyUrl(e.currentTarget.value))}
+            />
+          </div>
+          {savedSlug ? (
+            <button
+              type="button"
+              onClick={() => { setEditingSlug(false); setSlug(savedSlug); setStatus('idle'); setMsg(''); }}
+              className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium border border-gray-300 dark:border-slate-700
+                         bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-200 transition"
+            >
+              Cancelar
+            </button>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={status!=='ok' || prettyUrl(slug) === savedSlug}
+            className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-50"
+          >
+            Salvar
+          </button>
+        </div>
+        <div className="mt-1 min-h-[1.25rem] text-sm">
+          {status==='checking' && <span className="text-indigo-600 dark:text-indigo-400">Verificando…</span>}
+          {status==='ok' && <span className="text-emerald-700 dark:text-emerald-400">{msg||'Disponível!'}</span>}
+          {status==='taken' && <span className="text-rose-700 dark:text-rose-400">{msg||'Já em uso.'}</span>}
+          {status==='error' && <span className="text-amber-700 dark:text-amber-400">{msg||'Erro ao verificar.'}</span>}
+        </div>
+        <div className="mt-2 text-xs text-gray-600 dark:text-slate-500">
+          Seu link ficará assim: <span className="font-medium">{`https://${domainBase}/${prettyUrl(slug || 'sua-loja')}`}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* === Render === */
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-start-1 lg:col-span-3 p-5">
-        {/* aviso topo */}
-        {!completeness.allGood && (
-          <div className={inner + ' mb-4'}>
-            <div className="flex items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
-              <p className="text-sm text-amber-900 dark:text-amber-200">
-                Há itens pendentes no checklist abaixo. Conclua todos para liberar a página pública da sua loja.
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Modo edição isolado */}
+        {editingSlug ? (
+          <div className={inner}>
+            <div className="rounded-2xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 sm:p-5">
+              <h4 className="text-base sm:text-lg font-semibold text-indigo-900 dark:text-indigo-200">Editar link da loja</h4>
+              <p className="text-sm text-indigo-900/80 dark:text-indigo-200/80 mt-1">Escolha um identificador único para sua loja.</p>
 
-        {/* título + progresso (colado à esquerda) */}
-        <div className={inner + ' flex items-start'}>
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Checklist</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-400">
-              Finalize os passos para publicar sua página.
-            </p>
-          </div>
-          <div className="ml-auto hidden sm:flex items-center gap-3">
-            <span className="text-xs text-gray-600 dark:text-slate-400">{done}/{total} concluídos</span>
-            <div className="w-36 h-2 rounded-full bg-gray-200 dark:bg-slate-800 overflow-hidden">
-              <div className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all" style={{ width: `${(done / total) * 100}%` }} />
-            </div>
-          </div>
-        </div>
-
-        {/* checklist */}
-        <div className={inner + ' mt-4'}>
-          <Checklist
-            items={steps.map(s => ({
-              ok: s.ok,
-              label: s.label,
-              onClick: () => goTo(s.tab),
-            }))}
-          />
-        </div>
-
-        {/* slug section */}
-        {completeness.allGood && (
-          <div className={inner + ' mt-6'}>
-            {!hasSlug ? (
-              <div className="rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
-                <div className="text-sm text-indigo-900 dark:text-indigo-200">
-                  Sua loja está pronta! Defina o link exclusivo abaixo.
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
+                <div className="flex items-center rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/70 px-3 py-2">
+                  <span className="text-sm text-gray-500 dark:text-slate-400 mr-2">{domainBase}/</span>
+                  <input
+                    className="w-full bg-transparent outline-none text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
+                    placeholder="sua-loja"
+                    value={slug}
+                    onChange={(e) => { setSlug(e.target.value); }}
+                    onBlur={(e) => setSlug(prettyUrl(e.currentTarget.value))}
+                    autoFocus
+                  />
                 </div>
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2">
-                  <div className="flex items-center rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900/70 px-3 py-2">
-                    <span className="text-sm text-gray-500 dark:text-slate-400 mr-2">{domainBase}/</span>
-                    <input
-                      className="w-full bg-transparent outline-none text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
-                      placeholder="sua-loja"
-                      value={slug}
-                      onChange={(e) => { setSlug(e.target.value); setStatus('idle'); setMsg(''); }}
-                      onBlur={(e) => setSlug(prettyUrl(e.currentTarget.value))}
-                    />
+                <button
+                  type="button"
+                  onClick={() => { setSlug(savedSlug); setStatus('idle'); setMsg(''); setEditingSlug(false); }}
+                  className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium border border-gray-300 dark:border-slate-700
+                             bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={status!=='ok' || prettyUrl(slug) === savedSlug}
+                  className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-50"
+                >
+                  Salvar
+                </button>
+              </div>
+
+              <div className="mt-1 min-h-[1.25rem] text-sm">
+                {status==='checking' && <span className="text-indigo-600 dark:text-indigo-400">Verificando…</span>}
+                {status==='ok' && <span className="text-emerald-700 dark:text-emerald-400">{msg||'Disponível!'}</span>}
+                {status==='taken' && <span className="text-rose-700 dark:text-rose-400">{msg||'Já em uso.'}</span>}
+                {status==='error' && <span className="text-amber-700 dark:text-amber-400">{msg||'Erro ao verificar.'}</span>}
+              </div>
+              <div className="mt-2 text-xs text-gray-600 dark:text-slate-500">
+                Seu link ficará assim: <span className="font-medium">{`https://${domainBase}/${prettyUrl(slug || 'sua-loja')}`}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* FINAL ATIVO + COM SLUG */}
+            {!cmpLoading && cmp.allGood && savedSlug ? (
+              <div className={inner + ' space-y-6'}>
+                <div className="rounded-2xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 sm:p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="hidden sm:flex p-2 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-emerald-200/70 dark:border-emerald-900">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+                    </div>
+                    <div className="min-w-0 w-full">
+                      <h4 className="text-lg sm:text-xl font-semibold text-emerald-900 dark:text-emerald-200">Sua loja está ativa! 🚀</h4>
+                      <p className="text-sm text-emerald-800/90 dark:text-emerald-300/90 mt-1">Compartilhe o link abaixo para começar a receber agendamentos.</p>
+
+                      <div className="mt-4 rounded-xl border border-emerald-200/70 dark:border-emerald-900 bg-white/80 dark:bg-slate-900/70 px-3 py-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                          <div className="text-[15px] sm:text-base font-medium text-emerald-900 dark:text-emerald-200 break-all">{publicUrl}</div>
+                          <div className="sm:ml-auto flex items-center gap-1.5 flex-wrap">
+                            <button onClick={copyLink} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs border border-emerald-300/70 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition">
+                              <Copy className="w-3.5 h-3.5" /> Copiar
+                            </button>
+                            <a href={publicUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs border border-emerald-300/70 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition">
+                              <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                            </a>
+                            <button onClick={() => { setEditingSlug(true); setSlug(savedSlug); setStatus('idle'); setMsg(''); }} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs border border-emerald-300/70 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition">
+                              <Pencil className="w-3.5 h-3.5" /> Editar
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-3">
+                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Divulgue nas redes</div>
+                          <ul className="mt-1.5 text-sm text-gray-600 dark:text-slate-400 list-disc pl-5 space-y-1">
+                            <li>Coloque o link na bio do Instagram e TikTok.</li>
+                            <li>Fixe um story com o link.</li>
+                            <li>Responda DMs com o link para agendar.</li>
+                          </ul>
+                        </div>
+                        <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-3">
+                          <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Facilite o acesso</div>
+                          <ul className="mt-1.5 text-sm text-gray-600 dark:text-slate-400 list-disc pl-5 space-y-1">
+                            <li>Adicione o link no WhatsApp Business.</li>
+                            <li>Coloque o link na descrição do perfil.</li>
+                            <li>Compartilhe o link com clientes recorrentes.</li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      {!optionalDone && (
+                        <div className="mt-5 rounded-xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4">
+                          <div className="text-sm font-medium text-indigo-900 dark:text-indigo-200">Personalize sua loja (opcional)</div>
+                          <p className="text-sm text-indigo-900/80 dark:text-indigo-200/80 mt-1">Adicione sua logo e cores para deixar sua página com a sua cara.</p>
+                          <div className="mt-3">
+                            <button onClick={() => goTo('theme')} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white transition">
+                              Personalizar agora
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleCheck}
-                    className="rounded-xl px-3 py-2 text-sm font-medium border border-gray-300 dark:border-slate-700 bg-gray-50 hover:bg-gray-100 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-200 transition"
-                  >
-                    Verificar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={status==='taken' || status==='checking'}
-                    className="rounded-xl px-3 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-50"
-                  >
-                    Salvar
-                  </button>
-                </div>
-                <div className="mt-1 min-h-[1.25rem] text-sm">
-                  {status==='checking' && <span className="text-indigo-600 dark:text-indigo-400">Verificando…</span>}
-                  {status==='ok' && <span className="text-emerald-700 dark:text-emerald-400">{msg||'Disponível!'}</span>}
-                  {status==='taken' && <span className="text-rose-700 dark:text-rose-400">{msg||'Já em uso.'}</span>}
-                  {status==='error' && <span className="text-amber-700 dark:text-amber-400">{msg||'Erro ao verificar.'}</span>}
-                </div>
-                <div className="mt-2 text-xs text-gray-500 dark:text-slate-500">
-                  Seu link público ficará assim: <span className="font-medium">{publicUrl}</span>
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-4 flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-700 dark:text-emerald-300" />
-                <div className="text-sm text-emerald-900 dark:text-emerald-200">
-                  Sua loja já está ativa em <span className="font-medium">https://{domainBase}/{info.slug}</span>.  
-                  Dica: adicione o link nas suas redes sociais para maximizar agendamentos.
-                </div>
-              </div>
+              <>
+                {/* NOVA REGRA: ativo mas sem slug => mostra SÓ o bloco de slug */}
+                {!cmpLoading && cmp.allGood && !savedSlug ? (
+                  SlugEditorBlock
+                ) : (
+                  /* Caso contrário: checklist + slug */
+                  <>
+                    <div className={inner + ' flex items-start'}>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Checklist</h3>
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Complete os passos obrigatórios. A personalização é opcional.</p>
+                      </div>
+                      <div className="ml-auto hidden sm:flex items-center gap-3">
+                        <span className="text-xs text-gray-600 dark:text-slate-400">{done}/{total} concluídos</span>
+                        <div className="w-36 h-2 rounded-full bg-gray-200 dark:bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-indigo-600 dark:bg-indigo-500 transition-all" style={{ width: `${(done / total) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={inner}>
+                      <Checklist
+                        items={[
+                          ...required.map(s => ({ ok: s.ok, label: s.label, onClick: () => goTo(s.tab) })),
+                          { ok: optional.ok, label: optional.label, optional: true, onClick: () => goTo(optional.tab) },
+                        ]}
+                      />
+                    </div>
+
+                    {SlugEditorBlock}
+                  </>
+                )}
+              </>
             )}
-          </div>
+          </>
         )}
       </Card>
     </div>
