@@ -5,22 +5,21 @@ import toast from 'react-hot-toast';
 import { supabase } from '../../../lib/supabase';
 
 type Props = {
-  // dados atuais (para previews e texts auxiliares)
   info: { name?: string } & Record<string, any>;
 
-  // Cores atuais + setters (já integrados ao updateStore no pai)
+  // Cores (o pai persiste quando chamados)
   primary: string;
   secondary: string;
   onPrimary: (v: string) => void;
   onSecondary: (v: string) => void;
 
-  // Imagens atuais + setters (os setters salvam no banco no pai)
+  // Imagens atuais (persistidas) + setters que salvam no banco (pai)
   logoUrl: string | null;
   coverUrl: string | null;
   onLogo: (v: string | null) => void;
   onCover: (v: string | null) => void;
 
-  // 🔌 Needed para upload no storage
+  // IDs para upload
   storeId?: string;
   businessId?: string;
 };
@@ -31,7 +30,6 @@ const normalizeHex = (s: string) => {
   if (!v) return '#000000';
   if (v[0] !== '#') v = `#${v}`;
   if (!HEX_RE.test(v)) return v.toLowerCase();
-  // expande #abc para #aabbcc
   if (v.length === 4) v = `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
   return v.toLowerCase();
 };
@@ -51,10 +49,9 @@ const ThemeTab: React.FC<Props> = ({
   storeId,
   businessId,
 }) => {
+  // ---- Cores (commit no onBlur/onClick) ----
   const [primaryLocal, setPrimaryLocal] = React.useState(primary);
   const [secondaryLocal, setSecondaryLocal] = React.useState(secondary);
-  const [upLoading, setUpLoading] = React.useState<'logo' | 'cover' | null>(null);
-
   React.useEffect(() => setPrimaryLocal(primary), [primary]);
   React.useEffect(() => setSecondaryLocal(secondary), [secondary]);
 
@@ -69,30 +66,35 @@ const ThemeTab: React.FC<Props> = ({
     onSecondary(v);
   };
 
+  // ---- Imagens (stage → salvar) ----
+  const [upLoading, setUpLoading] = React.useState<'logo' | 'cover' | null>(null);
+  const [pendingLogo, setPendingLogo] = React.useState<string | null>(null);
+  const [pendingCover, setPendingCover] = React.useState<string | null>(null);
+
+  // zera pendências quando props externas mudarem (ex.: após salvar)
+  React.useEffect(() => setPendingLogo(null), [logoUrl]);
+  React.useEffect(() => setPendingCover(null), [coverUrl]);
+
+  const hasLogoChange = pendingLogo !== null; // null => sem mudança staged; string => novo URL; "" (não uso) — usamos null para remover
+  const hasCoverChange = pendingCover !== null;
+  const hasAnyChange = hasLogoChange || hasCoverChange;
+
   const pickFile = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'logo' | 'cover') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // validações leves
-    if (!file.type.startsWith('image/')) {
-      toast.error('Envie uma imagem.');
-      return;
-    }
-    if (file.size > 3 * 1024 * 1024) {
-      toast.error('Imagem muito grande (máx 3 MB).');
-      return;
-    }
+    if (!file.type.startsWith('image/')) { toast.error('Envie uma imagem.'); e.target.value = ''; return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error('Imagem muito grande (máx 3 MB).'); e.target.value = ''; return; }
 
-    // fallback (sem ids) — útil durante dev
+    // Dev fallback (sem IDs): preview local sem chamar onLogo/onCover
     if (!storeId || !businessId) {
       const url = URL.createObjectURL(file);
-      kind === 'logo' ? onLogo(url) : onCover(url);
-      toast.success('Imagem atualizada (preview local).');
+      if (kind === 'logo') setPendingLogo(url);
+      else setPendingCover(url);
       e.target.value = '';
       return;
     }
 
-    // upload
     try {
       setUpLoading(kind);
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
@@ -106,15 +108,13 @@ const ThemeTab: React.FC<Props> = ({
       });
       if (upErr) throw upErr;
 
-      // public URL
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = data.publicUrl;
 
-      if (kind === 'logo') onLogo(publicUrl);
-      else onCover(publicUrl);
-
-      toast.success('Imagem enviada!');
-    } catch (err: any) {
+      if (kind === 'logo') setPendingLogo(publicUrl);
+      else setPendingCover(publicUrl);
+      // sem toast aqui — só tostar quando realmente salvar no banco
+    } catch (err) {
       console.error(err);
       toast.error('Falha ao enviar a imagem.');
     } finally {
@@ -124,13 +124,39 @@ const ThemeTab: React.FC<Props> = ({
   };
 
   const clearImg = (kind: 'logo' | 'cover') => {
-    if (kind === 'logo') onLogo(null);
-    else onCover(null);
+    // marcar remoção staged (null significa “sem mudança”; para remover usamos string vazia especial? melhor usar um sentinel)
+    // usaremos string especial '__REMOVE__' para indicar remoção
+    if (kind === 'logo') setPendingLogo('__REMOVE__');
+    else setPendingCover('__REMOVE__');
   };
+
+  const applySaves = async () => {
+    try {
+      // logo
+      if (hasLogoChange) {
+        if (pendingLogo === '__REMOVE__') await onLogo(null);
+        else await onLogo(pendingLogo);
+      }
+      // cover
+      if (hasCoverChange) {
+        if (pendingCover === '__REMOVE__') await onCover(null);
+        else await onCover(pendingCover);
+      }
+      toast.success('Imagens salvas');
+      // deixar o pai refetchar e, quando props voltarem, os pendings são limpos pelos effects
+    } catch (e) {
+      console.error(e);
+      toast.error('Não foi possível salvar as imagens.');
+    }
+  };
+
+  // resolve qual URL mostrar (prioriza staged)
+  const logoPreview = pendingLogo && pendingLogo !== '__REMOVE__' ? pendingLogo : logoUrl;
+  const coverPreview = pendingCover && pendingCover !== '__REMOVE__' ? pendingCover : coverUrl;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      {/* ===== Painel: Imagens (AGORA PRIMEIRO) ===== */}
+      {/* ===== Imagens (primeiro) ===== */}
       <Card className="p-5">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
@@ -139,7 +165,7 @@ const ThemeTab: React.FC<Props> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Logo e capa</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              Envie imagens leves (até 3&nbsp;MB). A logo aparece em miniatura; a capa é opcional.
+              Envie imagens leves (até 3&nbsp;MB). As mudanças só são publicadas ao clicar em <strong>Salvar alterações</strong>.
             </p>
           </div>
         </div>
@@ -148,19 +174,21 @@ const ThemeTab: React.FC<Props> = ({
           {/* Logo */}
           <div>
             <div className="text-sm font-medium text-gray-800 dark:text-slate-200 mb-2">Logo</div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700 overflow-hidden grid place-items-center">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                {logoPreview ? (
+                  <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
                   <ImageIcon className="w-6 h-6 text-gray-400" />
                 )}
               </div>
 
-              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700
-                                 bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-sm cursor-pointer">
+              <label
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                           bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-xs cursor-pointer"
+              >
                 {upLoading === 'logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Trocar logo
+                Trocar
                 <input
                   type="file"
                   accept="image/*"
@@ -169,11 +197,11 @@ const ThemeTab: React.FC<Props> = ({
                 />
               </label>
 
-              {!!logoUrl && (
+              {(logoPreview || pendingLogo === '__REMOVE__') && (
                 <button
                   onClick={() => clearImg('logo')}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700
-                             hover:bg-gray-50 dark:hover:bg-slate-800 text-sm"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                             hover:bg-gray-50 dark:hover:bg-slate-800 text-xs"
                 >
                   <Trash2 className="w-4 h-4" />
                   Remover
@@ -185,19 +213,21 @@ const ThemeTab: React.FC<Props> = ({
           {/* Capa */}
           <div>
             <div className="text-sm font-medium text-gray-800 dark:text-slate-200 mb-2">Capa (opcional)</div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="w-28 h-16 rounded-xl bg-gray-100 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700 overflow-hidden grid place-items-center">
-                {coverUrl ? (
-                  <img src={coverUrl} alt="Capa" className="w-full h-full object-cover" />
+                {coverPreview ? (
+                  <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
                 ) : (
                   <ImageIcon className="w-6 h-6 text-gray-400" />
                 )}
               </div>
 
-              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700
-                                 bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-sm cursor-pointer">
+              <label
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                           bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-xs cursor-pointer"
+              >
                 {upLoading === 'cover' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Trocar capa
+                Trocar
                 <input
                   type="file"
                   accept="image/*"
@@ -206,11 +236,11 @@ const ThemeTab: React.FC<Props> = ({
                 />
               </label>
 
-              {!!coverUrl && (
+              {(coverPreview || pendingCover === '__REMOVE__') && (
                 <button
                   onClick={() => clearImg('cover')}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700
-                             hover:bg-gray-50 dark:hover:bg-slate-800 text-sm"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
+                             hover:bg-gray-50 dark:hover:bg-slate-800 text-xs"
                 >
                   <Trash2 className="w-4 h-4" />
                   Remover
@@ -219,15 +249,27 @@ const ThemeTab: React.FC<Props> = ({
             </div>
           </div>
         </div>
+
+        {/* Footer de salvar (aparece apenas com mudanças staged) */}
+        {hasAnyChange && (
+          <div className="mt-5 flex items-center justify-end">
+            <button
+              onClick={applySaves}
+              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium"
+            >
+              Salvar alterações
+            </button>
+          </div>
+        )}
       </Card>
 
-      {/* ===== Painel: Cores ===== */}
+      {/* ===== Cores ===== */}
       <Card className="xl:col-span-2 p-5">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
             <Palette className="w-5 h-5 text-gray-700 dark:text-slate-200" />
           </div>
-          <div>
+        <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Cores da sua página</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Escolha as cores principais. Use o seletor ou cole um HEX.
@@ -245,7 +287,7 @@ const ThemeTab: React.FC<Props> = ({
                 value={primaryLocal}
                 onChange={(e) => setPrimaryLocal(e.target.value)}
                 onBlur={commitPrimary}
-                className="h-10 w-12 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
+                className="h-9 w-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
               />
               <input
                 value={primaryLocal}
@@ -262,7 +304,7 @@ const ThemeTab: React.FC<Props> = ({
                 <button
                   key={c}
                   onClick={() => { setPrimaryLocal(c); onPrimary(c); }}
-                  className="w-8 h-8 rounded-lg border border-gray-200 dark:border-slate-700"
+                  className="w-7 h-7 rounded-lg border border-gray-200 dark:border-slate-700"
                   style={{ backgroundColor: c }}
                   title={c}
                 />
@@ -279,7 +321,7 @@ const ThemeTab: React.FC<Props> = ({
                 value={secondaryLocal}
                 onChange={(e) => setSecondaryLocal(e.target.value)}
                 onBlur={commitSecondary}
-                className="h-10 w-12 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
+                className="h-9 w-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
               />
               <input
                 value={secondaryLocal}
@@ -296,7 +338,7 @@ const ThemeTab: React.FC<Props> = ({
                 <button
                   key={c}
                   onClick={() => { setSecondaryLocal(c); onSecondary(c); }}
-                  className="w-8 h-8 rounded-lg border border-gray-200 dark:border-slate-700"
+                  className="w-7 h-7 rounded-lg border border-gray-200 dark:border-slate-700"
                   style={{ backgroundColor: c }}
                   title={c}
                 />
@@ -305,7 +347,7 @@ const ThemeTab: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Preview simples */}
+        {/* Preview */}
         <div className="mt-6 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
           <div className="p-4 sm:p-5 bg-white dark:bg-slate-900/70">
             <div className="text-sm text-gray-600 dark:text-slate-400">Preview</div>
