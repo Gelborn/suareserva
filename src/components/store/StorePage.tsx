@@ -306,6 +306,8 @@ const StorePage: React.FC = () => {
                 coverUrl={(store as any).cover_url || null}
                 onLogo={(url) => updateStore({ logo_url: url })}
                 onCover={(url) => updateStore({ cover_url: url })}
+                storeId={store.id}
+                businessId={business?.id}
               />
             </div>
           )}
