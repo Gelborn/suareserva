@@ -94,7 +94,7 @@ function validateWeek(rows: HoursRow[]): Record<number, DayError> {
 
 /* ──────────────────────── Component ─────────────────────── */
 const HoursTab: React.FC<{
-  storeId?: string;                   // ← pode vir indefinido; só carrega quando existir
+  storeId?: string;                   // pode vir indefinido; só carrega quando existir
   persistSlotAndBuffer?: boolean;     // salva em stores.slot_duration_min/buffer_before_min
 }> = ({ storeId, persistSlotAndBuffer = true }) => {
   const [loading, setLoading] = React.useState(true);
@@ -116,7 +116,6 @@ const HoursTab: React.FC<{
   React.useEffect(() => {
     let cancelled = false;
 
-    // sem storeId → não consulta
     if (!storeId) {
       setLoading(false);
       return;
@@ -196,14 +195,12 @@ const HoursTab: React.FC<{
         next[i].close_time = next[i].close_time ?? '18:00';
       }
 
-      // valida após alteração
       setErrors(validateWeek(next));
       return next;
     });
   };
 
   const setOpen = (i: number, v: string) => {
-    // sanitiza para HH:MM (input time já dá isso, mas garantimos)
     const val = /^(\d{2}):(\d{2})$/.test(v) ? v : '';
     setHourAt(i, { open_time: val || null });
   };
@@ -273,11 +270,13 @@ const HoursTab: React.FC<{
 
   /* ── UI ───────────────────────────────────────────────── */
   return (
-    <Card className="p-5 relative">
+    // Folga extra no mobile para PWA / barras
+    <Card className="p-5 relative pb-32 sm:pb-6">
       {/* Cabeçalho */}
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-          <Clock className="w-5 h-5 text-gray-700 dark:text-slate-200" />
+          {/* ícone branco no dark */}
+          <Clock className="w-5 h-5 text-gray-700 dark:text-white" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Horário de funcionamento</h3>
@@ -305,53 +304,107 @@ const HoursTab: React.FC<{
               const closeErr = !!err.close;
 
               return (
-                <div key={`day-${d.day}`} className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="w-16 shrink-0 font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
-
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={d.is_closed}
-                      onChange={(e) => setHourAt(i, { is_closed: e.target.checked })}
-                    />
-                    Fechado
-                  </label>
-
-                  {!d.is_closed && (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 w-full">
-                      <div className="inline-flex items-center gap-2">
-                        <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
+                <div key={`day-${d.day}`} className="p-3 sm:p-4">
+                  {/* ───────────────── Mobile (2 linhas, gaps compactos) ───────────────── */}
+                  <div className="sm:hidden space-y-2">
+                    {/* Linha 1: Dia + Fechado */}
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
+                      <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
                         <input
-                          type="time"
-                          value={d.open_time || ''}
-                          onChange={(e) => setOpen(i, e.target.value)}
-                          className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/60
-                                      ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                          aria-invalid={openErr}
+                          type="checkbox"
+                          checked={d.is_closed}
+                          onChange={(e) => setHourAt(i, { is_closed: e.target.checked })}
                         />
-                      </div>
-                      <div className="inline-flex items-center gap-2">
-                        <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
-                        <input
-                          type="time"
-                          value={d.close_time || ''}
-                          onChange={(e) => setClose(i, e.target.value)}
-                          className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/60
-                                      ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                          aria-invalid={closeErr}
-                        />
-                      </div>
-
-                      {/* Mensagens de erro por dia */}
-                      {(hasGeneral || openErr || closeErr) && (
-                        <div className="text-xs text-red-600 dark:text-red-400 mt-1 sm:mt-0 sm:ml-2">
-                          {err.open ? `Abre: ${err.open}. ` : ''}
-                          {err.close ? `Fecha: ${err.close}. ` : ''}
-                          {err.general ? `${err.general}.` : ''}
-                        </div>
-                      )}
+                        Fechado
+                      </label>
                     </div>
-                  )}
+
+                    {/* Linha 2: Abre / Fecha (se aberto) */}
+                    {!d.is_closed && (
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
+                          <input
+                            type="time"
+                            value={d.open_time || ''}
+                            onChange={(e) => setOpen(i, e.target.value)}
+                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                        ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                            aria-invalid={openErr}
+                          />
+                        </div>
+                        <div className="inline-flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
+                          <input
+                            type="time"
+                            value={d.close_time || ''}
+                            onChange={(e) => setClose(i, e.target.value)}
+                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                        ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                            aria-invalid={closeErr}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(hasGeneral || openErr || closeErr) && (
+                      <div className="text-xs text-red-600 dark:text-red-400">
+                        {err.open ? `Abre: ${err.open}. ` : ''}
+                        {err.close ? `Fecha: ${err.close}. ` : ''}
+                        {err.general ? `${err.general}.` : ''}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ───────────────── Desktop (linha única) ───────────────── */}
+                  <div className="hidden sm:flex sm:items-center sm:gap-3">
+                    <div className="w-16 shrink-0 font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
+
+                    <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={d.is_closed}
+                        onChange={(e) => setHourAt(i, { is_closed: e.target.checked })}
+                      />
+                      Fechado
+                    </label>
+
+                    {!d.is_closed && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
+                          <input
+                            type="time"
+                            value={d.open_time || ''}
+                            onChange={(e) => setOpen(i, e.target.value)}
+                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                        ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                            aria-invalid={openErr}
+                          />
+                        </div>
+                        <div className="inline-flex items-center gap-2">
+                          <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
+                          <input
+                            type="time"
+                            value={d.close_time || ''}
+                            onChange={(e) => setClose(i, e.target.value)}
+                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                        ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                            aria-invalid={closeErr}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {(hasGeneral || openErr || closeErr) && (
+                      <div className="text-xs text-red-600 dark:text-red-400 sm:ml-2">
+                        {err.open ? `Abre: ${err.open}. ` : ''}
+                        {err.close ? `Fecha: ${err.close}. ` : ''}
+                        {err.general ? `${err.general}.` : ''}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -365,7 +418,7 @@ const HoursTab: React.FC<{
             <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
               Granularidade dos horários exibidos aos clientes.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="relative">
                 <select
                   className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
@@ -392,7 +445,7 @@ const HoursTab: React.FC<{
             <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
               Tempo extra entre serviços para transição (não aparece para o cliente).
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="relative">
                 <select
                   className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
@@ -429,12 +482,12 @@ const HoursTab: React.FC<{
         </button>
       </div>
 
-      {/* Botão flutuante (mobile / PWA) */}
+      {/* Botão flutuante (mobile / PWA) – offset maior e gaps compactos no resto da UI */}
       {dirty && (
         <div className="sm:hidden">
           <div
             className="fixed inset-x-0 px-4 z-40 pointer-events-none"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
           >
             <div className="pointer-events-auto max-w-md mx-auto">
               <button
