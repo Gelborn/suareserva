@@ -308,6 +308,7 @@ const StorePage: React.FC = () => {
                 onCover={(url) => updateStore({ cover_url: url })}
                 storeId={store.id}
                 businessId={business?.id}
+                showSuccessToast={false}
               />
             </div>
           )}

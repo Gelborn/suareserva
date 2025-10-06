@@ -14,7 +14,6 @@ export type StoreRow = {
   buffer_before_min: number;
   buffer_after_min: number;
   max_parallel: number;
-  // Branding / social (opcionais — ver migração abaixo)
   instagram_url?: string | null;
   tiktok_url?: string | null;
   logo_url?: string | null;

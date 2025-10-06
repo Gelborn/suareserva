@@ -22,6 +22,8 @@ import StorePage from './components/store/StorePage';
 import AppToaster from './components/ui/AppToaster';
 import LoadingScreen from './components/ui/LoadingScreen';
 
+import Team from './components/Dashboard/Team';
+
 const AuthedShell: React.FC = () => {
   const { isAuthenticated, isAuthLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -111,14 +113,7 @@ const AuthedShell: React.FC = () => {
               {/* Você pode colocar sua tela de team aqui quando existir */}
               <Route
                 path="/team"
-                element={
-                  <div className="space-y-6">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Time</h1>
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-100 dark:border-gray-700">
-                      <p className="text-gray-600 dark:text-gray-300">Gestão de equipe em desenvolvimento...</p>
-                    </div>
-                  </div>
-                }
+                element={<Team />}
               />
               <Route path="/stores" element={<Stores />} />
               <Route path="/stores/:id" element={<StorePage />} />

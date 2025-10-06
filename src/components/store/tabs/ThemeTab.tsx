@@ -1,27 +1,30 @@
 import React from 'react';
 import Card from '../components/Card';
-import { Palette, Image as ImageIcon, Loader2, Trash2, Upload } from 'lucide-react';
+import { Palette, Image as ImageIcon, Loader2, Trash2, Upload, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../../lib/supabase';
 
 type Props = {
   info: { name?: string } & Record<string, any>;
 
-  // Cores (o pai persiste quando chamados)
+  // Cores
   primary: string;
   secondary: string;
   onPrimary: (v: string) => void;
   onSecondary: (v: string) => void;
 
-  // Imagens atuais (persistidas) + setters que salvam no banco (pai)
+  // Imagens + persistência pelo pai
   logoUrl: string | null;
   coverUrl: string | null;
-  onLogo: (v: string | null) => void;
-  onCover: (v: string | null) => void;
+  onLogo: (v: string | null) => Promise<void> | void;
+  onCover: (v: string | null) => Promise<void> | void;
 
   // IDs para upload
   storeId?: string;
   businessId?: string;
+
+  // Controla se este componente deve exibir toast de sucesso
+  showSuccessToast?: boolean;
 };
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -36,6 +39,68 @@ const normalizeHex = (s: string) => {
 
 const presets = ['#6366f1', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#0ea5e9', '#111827'];
 
+/* ───────────────────────── Confirm Dialog ───────────────────────── */
+const ConfirmDialog: React.FC<{
+  open: boolean;
+  title: string;
+  description?: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void | Promise<void>;
+  onClose: () => void;
+}> = ({ open, title, description, confirmText = 'Confirmar', cancelText = 'Cancelar', onConfirm, onClose }) => {
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter') onConfirm();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onConfirm, onClose]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-[61] w-full max-w-md rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-xl"
+      >
+        <div className="flex items-start justify-between">
+          <h4 className="text-base font-semibold text-gray-900 dark:text-slate-100">{title}</h4>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-200"
+            aria-label="Fechar"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {description && (
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">{description}</p>
+        )}
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 text-sm hover:bg-gray-50 dark:hover:bg-slate-800"
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium"
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ───────────────────────── Component ───────────────────────── */
 const ThemeTab: React.FC<Props> = ({
   info,
   primary,
@@ -48,6 +113,7 @@ const ThemeTab: React.FC<Props> = ({
   onCover,
   storeId,
   businessId,
+  showSuccessToast = true,
 }) => {
   // ---- Cores (commit no onBlur/onClick) ----
   const [primaryLocal, setPrimaryLocal] = React.useState(primary);
@@ -70,28 +136,39 @@ const ThemeTab: React.FC<Props> = ({
   const [upLoading, setUpLoading] = React.useState<'logo' | 'cover' | null>(null);
   const [pendingLogo, setPendingLogo] = React.useState<string | null>(null);
   const [pendingCover, setPendingCover] = React.useState<string | null>(null);
+  const [pendingFileName, setPendingFileName] = React.useState<{ logo?: string; cover?: string }>({});
+  const [saving, setSaving] = React.useState(false);
 
-  // zera pendências quando props externas mudarem (ex.: após salvar)
+  // Remoção imediata
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [confirmKind, setConfirmKind] = React.useState<'logo' | 'cover' | null>(null);
+  const [deleting, setDeleting] = React.useState<'logo' | 'cover' | null>(null);
+
+  // zera pendências quando props externas mudarem (após salvar pelo pai)
   React.useEffect(() => setPendingLogo(null), [logoUrl]);
   React.useEffect(() => setPendingCover(null), [coverUrl]);
 
-  const hasLogoChange = pendingLogo !== null; // null => sem mudança staged; string => novo URL; "" (não uso) — usamos null para remover
+  const hasLogoChange = pendingLogo !== null;
   const hasCoverChange = pendingCover !== null;
   const hasAnyChange = hasLogoChange || hasCoverChange;
 
-  const pickFile = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'logo' | 'cover') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const MAX_MB = 3;
+  const MAX_BYTES = MAX_MB * 1024 * 1024;
 
-    if (!file.type.startsWith('image/')) { toast.error('Envie uma imagem.'); e.target.value = ''; return; }
-    if (file.size > 3 * 1024 * 1024) { toast.error('Imagem muito grande (máx 3 MB).'); e.target.value = ''; return; }
+  const handleFile = async (file: File, kind: 'logo' | 'cover') => {
+    if (!file.type.startsWith('image/')) { toast.error('Envie uma imagem.'); return; }
+    if (file.size > MAX_BYTES) { toast.error(`Imagem muito grande (máx ${MAX_MB} MB).`); return; }
 
-    // Dev fallback (sem IDs): preview local sem chamar onLogo/onCover
+    // Dev fallback (sem IDs): preview local sem persistir
     if (!storeId || !businessId) {
       const url = URL.createObjectURL(file);
-      if (kind === 'logo') setPendingLogo(url);
-      else setPendingCover(url);
-      e.target.value = '';
+      if (kind === 'logo') {
+        setPendingLogo(url);
+        setPendingFileName((p) => ({ ...p, logo: file.name }));
+      } else {
+        setPendingCover(url);
+        setPendingFileName((p) => ({ ...p, cover: file.name }));
+      }
       return;
     }
 
@@ -111,153 +188,229 @@ const ThemeTab: React.FC<Props> = ({
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       const publicUrl = data.publicUrl;
 
-      if (kind === 'logo') setPendingLogo(publicUrl);
-      else setPendingCover(publicUrl);
-      // sem toast aqui — só tostar quando realmente salvar no banco
+      if (kind === 'logo') {
+        setPendingLogo(publicUrl);
+        setPendingFileName((p) => ({ ...p, logo: file.name }));
+      } else {
+        setPendingCover(publicUrl);
+        setPendingFileName((p) => ({ ...p, cover: file.name }));
+      }
+      // sem toast aqui — só quando salvar no banco
     } catch (err) {
       console.error(err);
       toast.error('Falha ao enviar a imagem.');
     } finally {
       setUpLoading(null);
-      e.target.value = '';
     }
   };
 
-  const clearImg = (kind: 'logo' | 'cover') => {
-    // marcar remoção staged (null significa “sem mudança”; para remover usamos string vazia especial? melhor usar um sentinel)
-    // usaremos string especial '__REMOVE__' para indicar remoção
-    if (kind === 'logo') setPendingLogo('__REMOVE__');
-    else setPendingCover('__REMOVE__');
+  const pickFile = async (e: React.ChangeEvent<HTMLInputElement>, kind: 'logo' | 'cover') => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    handleFile(file, kind);
+  };
+
+  const onDrop = (ev: React.DragEvent<HTMLDivElement>, kind: 'logo' | 'cover') => {
+    ev.preventDefault();
+    const file = ev.dataTransfer.files?.[0];
+    if (file) handleFile(file, kind);
+  };
+
+  // Remoção: abre diálogo
+  const clearImgAsk = (kind: 'logo' | 'cover') => {
+    setConfirmKind(kind);
+    setConfirmOpen(true);
+  };
+
+  // Remoção: confirma e já PERSISTE (sem “Salvar alterações”)
+  const clearImgConfirm = async () => {
+    if (!confirmKind) return;
+    try {
+      setDeleting(confirmKind);
+
+      if (confirmKind === 'logo') {
+        setPendingLogo(null);       // limpa qualquer staged
+        await onLogo(null);         // persiste
+      } else {
+        setPendingCover(null);
+        await onCover(null);
+      }
+
+      if (showSuccessToast) toast.success('Imagem removida.');
+    } catch (e) {
+      console.error(e);
+      toast.error('Não foi possível remover a imagem.');
+    } finally {
+      setDeleting(null);
+      setConfirmOpen(false);
+    }
+  };
+
+  const undoPending = (kind: 'logo' | 'cover') => {
+    if (kind === 'logo') setPendingLogo(null);
+    else setPendingCover(null);
+    setPendingFileName((p) => ({ ...p, [kind]: undefined }));
   };
 
   const applySaves = async () => {
     try {
-      // logo
-      if (hasLogoChange) {
-        if (pendingLogo === '__REMOVE__') await onLogo(null);
-        else await onLogo(pendingLogo);
+      setSaving(true);
+
+      // Salva apenas uploads staged (remoção agora é imediata)
+      if (hasLogoChange && pendingLogo) {
+        await onLogo(pendingLogo);
       }
-      // cover
-      if (hasCoverChange) {
-        if (pendingCover === '__REMOVE__') await onCover(null);
-        else await onCover(pendingCover);
+      if (hasCoverChange && pendingCover) {
+        await onCover(pendingCover);
       }
-      toast.success('Imagens salvas');
-      // deixar o pai refetchar e, quando props voltarem, os pendings são limpos pelos effects
+
+      if (showSuccessToast) toast.success('Imagens salvas.');
     } catch (e) {
       console.error(e);
       toast.error('Não foi possível salvar as imagens.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // resolve qual URL mostrar (prioriza staged)
-  const logoPreview = pendingLogo && pendingLogo !== '__REMOVE__' ? pendingLogo : logoUrl;
-  const coverPreview = pendingCover && pendingCover !== '__REMOVE__' ? pendingCover : coverUrl;
+  // preview (prioriza staged)
+  const logoPreview = pendingLogo ?? logoUrl;
+  const coverPreview = pendingCover ?? coverUrl;
+
+  // Estilos base p/ botões menores + ícones brancos no dark
+  const btnBase =
+    'inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs transition-colors ' +
+    'border-gray-200 dark:border-slate-700 bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 ' +
+    'text-gray-800 dark:text-white';
+  const iconSm = 'w-4 h-4';
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      {/* ===== Imagens (primeiro) ===== */}
+      {/* ===== Imagens ===== */}
       <Card className="p-5">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-            <ImageIcon className="w-5 h-5 text-gray-700 dark:text-slate-200" />
+            <ImageIcon className="w-5 h-5 text-gray-700 dark:text-white" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Logo e capa</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              Envie imagens leves (até 3&nbsp;MB). As mudanças só são publicadas ao clicar em <strong>Salvar alterações</strong>.
+              Envie imagens leves (até 3&nbsp;MB). As mudanças de upload só são publicadas ao clicar em <strong>Salvar alterações</strong>.
             </p>
           </div>
         </div>
 
+        {hasAnyChange && (
+          <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+            Há alterações pendentes de upload. Clique em <strong>Salvar alterações</strong> para publicar.
+          </div>
+        )}
+
         <div className="mt-5 space-y-6">
           {/* Logo */}
-          <div>
+          <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, 'logo')}>
             <div className="text-sm font-medium text-gray-800 dark:text-slate-200 mb-2">Logo</div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700 overflow-hidden grid place-items-center">
                 {logoPreview ? (
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                  <ImageIcon className="w-6 h-6 text-gray-400 dark:text-slate-300" />
                 )}
               </div>
 
-              <label
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
-                           bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-xs cursor-pointer"
-              >
-                {upLoading === 'logo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Trocar
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => pickFile(e, 'logo')}
-                />
+              <label className={`${btnBase} cursor-pointer`}>
+                {upLoading === 'logo' ? <Loader2 className={`${iconSm} animate-spin`} /> : <Upload className={iconSm} />}
+                <span className="hidden sm:inline">Trocar</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => pickFile(e, 'logo')} />
               </label>
 
-              {(logoPreview || pendingLogo === '__REMOVE__') && (
-                <button
-                  onClick={() => clearImg('logo')}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
-                             hover:bg-gray-50 dark:hover:bg-slate-800 text-xs"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Remover
-                </button>
+              {logoPreview && (
+                <>
+                  <button
+                    onClick={() => clearImgAsk('logo')}
+                    className={btnBase}
+                    disabled={deleting === 'logo'}
+                  >
+                    {deleting === 'logo' ? <Loader2 className={`${iconSm} animate-spin`} /> : <Trash2 className={iconSm} />}
+                    <span className="hidden sm:inline">{deleting === 'logo' ? 'Removendo…' : 'Remover'}</span>
+                  </button>
+                  {hasLogoChange && pendingLogo && (
+                    <button onClick={() => undoPending('logo')} className={btnBase} disabled={deleting !== null}>
+                      <X className={iconSm} />
+                      <span className="hidden sm:inline">Desfazer</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+              Arraste e solte uma imagem aqui para enviar.
+              {pendingFileName.logo && pendingLogo && (
+                <span className="ml-2">Selecionado: <strong>{pendingFileName.logo}</strong></span>
               )}
             </div>
           </div>
 
           {/* Capa */}
-          <div>
+          <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, 'cover')}>
             <div className="text-sm font-medium text-gray-800 dark:text-slate-200 mb-2">Capa (opcional)</div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="w-28 h-16 rounded-xl bg-gray-100 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700 overflow-hidden grid place-items-center">
                 {coverPreview ? (
                   <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
                 ) : (
-                  <ImageIcon className="w-6 h-6 text-gray-400" />
+                  <ImageIcon className="w-6 h-6 text-gray-400 dark:text-slate-300" />
                 )}
               </div>
 
-              <label
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
-                           bg-white hover:bg-gray-50 dark:bg-slate-900/70 dark:hover:bg-slate-800 text-xs cursor-pointer"
-              >
-                {upLoading === 'cover' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                Trocar
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => pickFile(e, 'cover')}
-                />
+              <label className={`${btnBase} cursor-pointer`}>
+                {upLoading === 'cover' ? <Loader2 className={`${iconSm} animate-spin`} /> : <Upload className={iconSm} />}
+                <span className="hidden sm:inline">Trocar</span>
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => pickFile(e, 'cover')} />
               </label>
 
-              {(coverPreview || pendingCover === '__REMOVE__') && (
-                <button
-                  onClick={() => clearImg('cover')}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700
-                             hover:bg-gray-50 dark:hover:bg-slate-800 text-xs"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Remover
-                </button>
+              {coverPreview && (
+                <>
+                  <button
+                    onClick={() => clearImgAsk('cover')}
+                    className={btnBase}
+                    disabled={deleting === 'cover'}
+                  >
+                    {deleting === 'cover' ? <Loader2 className={`${iconSm} animate-spin`} /> : <Trash2 className={iconSm} />}
+                    <span className="hidden sm:inline">{deleting === 'cover' ? 'Removendo…' : 'Remover'}</span>
+                  </button>
+                  {hasCoverChange && pendingCover && (
+                    <button onClick={() => undoPending('cover')} className={btnBase} disabled={deleting !== null}>
+                      <X className={iconSm} />
+                      <span className="hidden sm:inline">Desfazer</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+              Arraste e solte uma imagem aqui para enviar.
+              {pendingFileName.cover && pendingCover && (
+                <span className="ml-2">Selecionado: <strong>{pendingFileName.cover}</strong></span>
               )}
             </div>
           </div>
         </div>
 
-        {/* Footer de salvar (aparece apenas com mudanças staged) */}
+        {/* Footer de salvar (aparece apenas com uploads staged) */}
         {hasAnyChange && (
-          <div className="mt-5 flex items-center justify-end">
+          <div className="mt-5 flex items-center justify-end gap-2">
             <button
               onClick={applySaves}
-              className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium"
+              disabled={saving}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-white text-sm font-medium ${
+                saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+              }`}
             >
-              Salvar alterações
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {saving ? 'Salvando…' : 'Salvar alterações'}
             </button>
           </div>
         )}
@@ -267,9 +420,9 @@ const ThemeTab: React.FC<Props> = ({
       <Card className="xl:col-span-2 p-5">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-            <Palette className="w-5 h-5 text-gray-700 dark:text-slate-200" />
+            <Palette className="w-5 h-5 text-gray-700 dark:text-white" />
           </div>
-        <div>
+          <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Cores da sua página</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">
               Escolha as cores principais. Use o seletor ou cole um HEX.
@@ -288,6 +441,7 @@ const ThemeTab: React.FC<Props> = ({
                 onChange={(e) => setPrimaryLocal(e.target.value)}
                 onBlur={commitPrimary}
                 className="h-9 w-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
+                aria-label="Selecionar cor primária"
               />
               <input
                 value={primaryLocal}
@@ -307,6 +461,7 @@ const ThemeTab: React.FC<Props> = ({
                   className="w-7 h-7 rounded-lg border border-gray-200 dark:border-slate-700"
                   style={{ backgroundColor: c }}
                   title={c}
+                  aria-label={`Preset ${c}`}
                 />
               ))}
             </div>
@@ -322,6 +477,7 @@ const ThemeTab: React.FC<Props> = ({
                 onChange={(e) => setSecondaryLocal(e.target.value)}
                 onBlur={commitSecondary}
                 className="h-9 w-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900/70"
+                aria-label="Selecionar cor secundária"
               />
               <input
                 value={secondaryLocal}
@@ -341,6 +497,7 @@ const ThemeTab: React.FC<Props> = ({
                   className="w-7 h-7 rounded-lg border border-gray-200 dark:border-slate-700"
                   style={{ backgroundColor: c }}
                   title={c}
+                  aria-label={`Preset ${c}`}
                 />
               ))}
             </div>
@@ -370,6 +527,21 @@ const ThemeTab: React.FC<Props> = ({
           </div>
         </div>
       </Card>
+
+      {/* Modal de confirmação para remover logo/capa (remoção imediata) */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Remover imagem?"
+        description={
+          confirmKind === 'logo'
+            ? 'Tem certeza que deseja remover a logo?'
+            : 'Tem certeza que deseja remover a capa?'
+        }
+        confirmText="Remover"
+        cancelText="Cancelar"
+        onConfirm={clearImgConfirm}
+        onClose={() => setConfirmOpen(false)}
+      />
     </div>
   );
 };
