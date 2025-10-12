@@ -1,7 +1,7 @@
 // src/pages/stores/Stores.tsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Phone } from 'lucide-react';
+import { Building2, Phone, ChevronRight } from 'lucide-react';
 
 import { useBusiness } from '../../hooks/useBusiness';
 import { useStores } from '../../hooks/useStores';
@@ -54,17 +54,17 @@ const StatusBadge: React.FC<{ text: string; tone: BadgeTone }> = ({ text, tone }
   );
 };
 
-// Skeleton (mesma altura dos cards)
+// Skeleton
 const StoreSkeleton: React.FC = () => (
   <div className="p-5 min-h-[12rem] flex flex-col justify-between rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white dark:bg-gray-800 shadow-sm">
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-3">
       <div className="w-11 h-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
       <div className="min-w-0 flex-1">
         <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
         <div className="h-4 w-56 rounded bg-gray-200 dark:bg-gray-700 mb-1" />
         <div className="h-4 w-36 rounded bg-gray-200 dark:bg-gray-700" />
       </div>
-      <div className="h-6 w-16 rounded bg-gray-200 dark:bg-gray-700" />
+      <div className="w-5 h-5 rounded bg-gray-200 dark:bg-gray-700" />
     </div>
     <div className="h-9 w-full sm:w-28 self-end rounded-xl bg-gray-200 dark:bg-gray-700" />
   </div>
@@ -76,7 +76,6 @@ const Stores: React.FC = () => {
   const navigate = useNavigate();
   const { business } = useBusiness();
 
-  // ✅ usa useStores integrado com batch RPC
   const {
     loading,
     stores,
@@ -102,7 +101,6 @@ const Stores: React.FC = () => {
   const statusInfo = (s: any): { text: string; tone: BadgeTone } => {
     const st = getStatus(s.id);
     if (!st) {
-      // enquanto carrega status do RPC
       const hasBasics = !!(s?.name && (s?.address_one_line || s?.street));
       return hasBasics ? { text: 'Checando…', tone: 'ok' } : { text: 'Checando…', tone: 'warn' };
     }
@@ -156,7 +154,7 @@ const Stores: React.FC = () => {
           </div>
         </Card>
       ) : (
-        // Lista de cards clicáveis (sem botão "Ver loja")
+        // Cards clicáveis com chevron no rodapé (sempre visível)
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {stores.map((s: any) => {
             const addr = addressOneLine(s);
@@ -184,25 +182,30 @@ const Stores: React.FC = () => {
                            hover:bg-gray-50 dark:hover:bg-gray-800/80 cursor-pointer
                            focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
               >
-                {/* 1ª linha: logo + nome + status */}
-                <div className="flex items-center gap-3 min-w-0">
+                {/* Linha principal: avatar + conteúdo */}
+                <div className="flex items-start gap-3 min-w-0">
                   <StoreAvatar name={s.name} logoUrl={s.logo_url || null} />
+
+                  {/* Conteúdo */}
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    {/* Nome + status */}
+                    <div className="flex items-start gap-2 flex-wrap">
                       <div
-                        className="text-lg font-semibold break-words line-clamp-2 text-gray-900 dark:text-white"
+                        className="text-[15px] sm:text-lg font-semibold leading-snug break-words line-clamp-2 text-gray-900 dark:text-white"
                         title={s.name}
                       >
                         {s.name}
                       </div>
                       <StatusBadge text={status.text} tone={status.tone} />
                     </div>
-                    {/* 2ª linha: endereço */}
-                    <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
+
+                    {/* Endereço (quebra em até 2 linhas) */}
+                    <div className="mt-0.5 text-[13px] sm:text-[14px] leading-snug text-gray-600 dark:text-gray-400 break-words line-clamp-2">
                       {addr || <span className="text-gray-400 dark:text-gray-500">Endereço não configurado</span>}
                     </div>
-                    {/* 3ª linha: whatsapp */}
-                    <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1 mt-1">
+
+                    {/* WhatsApp */}
+                    <div className="mt-1 text-[13px] sm:text-[14px] leading-snug text-gray-600 dark:text-gray-400 flex items-center gap-1">
                       <Phone className="w-4 h-4 shrink-0 opacity-70" />
                       {s.whatsapp ? (
                         <span className="break-all">{s.whatsapp}</span>
@@ -213,11 +216,12 @@ const Stores: React.FC = () => {
                   </div>
                 </div>
 
-                {/* rodapé sutil com “dica” de interação */}
+                {/* Rodapé: chevron sempre visível à direita */}
                 <div className="flex items-center justify-end">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition">
-                    Abrir loja ↵
-                  </span>
+                  <ChevronRight
+                    className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition"
+                    aria-hidden="true"
+                  />
                 </div>
               </div>
             );
