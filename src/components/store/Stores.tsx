@@ -56,7 +56,7 @@ const StatusBadge: React.FC<{ text: string; tone: BadgeTone }> = ({ text, tone }
 
 // Skeleton (mesma altura dos cards)
 const StoreSkeleton: React.FC = () => (
-  <Card className="p-5 h-48 flex flex-col justify-between animate-pulse">
+  <div className="p-5 min-h-[12rem] flex flex-col justify-between rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white dark:bg-gray-800 shadow-sm">
     <div className="flex items-center gap-3">
       <div className="w-11 h-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
       <div className="min-w-0 flex-1">
@@ -67,7 +67,7 @@ const StoreSkeleton: React.FC = () => (
       <div className="h-6 w-16 rounded bg-gray-200 dark:bg-gray-700" />
     </div>
     <div className="h-9 w-full sm:w-28 self-end rounded-xl bg-gray-200 dark:bg-gray-700" />
-  </Card>
+  </div>
 );
 
 /* ---------------- Page ---------------- */
@@ -113,7 +113,8 @@ const Stores: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Lojas</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">Gerencie suas unidades/endereços.</p>
@@ -122,7 +123,7 @@ const Stores: React.FC = () => {
         {!empty && !loading && (
           <button
             onClick={onOpenModal}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shrink-0 whitespace-nowrap"
           >
             + Nova loja
           </button>
@@ -130,7 +131,7 @@ const Stores: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <StoreSkeleton key={i} />
           ))}
@@ -148,20 +149,41 @@ const Stores: React.FC = () => {
           <div className="mt-6">
             <button
               onClick={onOpenModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold whitespace-nowrap"
             >
               Criar minha loja
             </button>
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        // Lista de cards clicáveis (sem botão "Ver loja")
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {stores.map((s: any) => {
             const addr = addressOneLine(s);
             const status = statusInfo(s);
 
+            const go = () => navigate(`/stores/${s.id}`);
+            const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                go();
+              }
+            };
+
             return (
-              <Card key={s.id} className="p-5 h-48 flex flex-col justify-between">
+              <div
+                key={s.id}
+                role="button"
+                tabIndex={0}
+                onClick={go}
+                onKeyDown={onKey}
+                aria-label={`Abrir loja ${s.name}`}
+                className="group p-5 min-h-[12rem] flex flex-col justify-between
+                           rounded-2xl border border-gray-200/70 dark:border-gray-700/70
+                           bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition
+                           hover:bg-gray-50 dark:hover:bg-gray-800/80 cursor-pointer
+                           focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+              >
                 {/* 1ª linha: logo + nome + status */}
                 <div className="flex items-center gap-3 min-w-0">
                   <StoreAvatar name={s.name} logoUrl={s.logo_url || null} />
@@ -191,16 +213,13 @@ const Stores: React.FC = () => {
                   </div>
                 </div>
 
-                {/* CTA */}
+                {/* rodapé sutil com “dica” de interação */}
                 <div className="flex items-center justify-end">
-                  <button
-                    onClick={() => navigate(`/stores/${s.id}`)}
-                    className="px-4 h-9 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium w-full sm:w-auto"
-                  >
-                    Ver loja
-                  </button>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 opacity-0 group-hover:opacity-100 transition">
+                    Abrir loja ↵
+                  </span>
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
