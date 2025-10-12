@@ -82,7 +82,6 @@ function usePTR(ref: React.RefObject<HTMLDivElement>, onRefresh: () => Promise<a
         setOffset(THRESHOLD);
         try { await onRefresh(); }
         finally {
-          // smooth close
           setTimeout(() => { setOffset(0); setRefreshing(false); }, 300);
         }
       } else {
@@ -170,19 +169,21 @@ const Team: React.FC = () => {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
-  const filtered = React.useMemo(() =>
-    members.filter((m) =>
-      m.full_name.toLowerCase().includes(query.toLowerCase()) ||
-      (m.store_name || '').toLowerCase().includes(query.toLowerCase())
-    )
-  , [members, query]);
+  const filtered = React.useMemo(
+    () =>
+      members.filter((m) =>
+        m.full_name.toLowerCase().includes(query.toLowerCase()) ||
+        (m.store_name || '').toLowerCase().includes(query.toLowerCase())
+      ),
+    [members, query]
+  );
 
   const storeOptions = stores.map(s => ({ id: s.id, name: s.name }));
 
   const openCreate = () => { setModalMode('create'); setEditing(null); setModalOpen(true); };
   const openEdit = (m: MemberWithStore) => { setModalMode('edit'); setEditing(m); setModalOpen(true); };
 
-  /* ---- PTR hook attached to the scrollable Card body ---- */
+  /* ---- PTR hook attached to the scrollable list ---- */
   const listRef = React.useRef<HTMLDivElement>(null);
   const { offset, refreshing } = usePTR(listRef, async () => { await refresh(); });
 
@@ -249,7 +250,7 @@ const Team: React.FC = () => {
     );
   }
 
-  /* -------------------- List -------------------- */
+  /* -------------------- List (sem Card por trás) -------------------- */
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* Header + busca */}
@@ -282,132 +283,139 @@ const Team: React.FC = () => {
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden">
+      {/* Contêiner scrollável sem fundo */}
+      <div
+        className="relative overflow-auto"
+        style={{ maxHeight: 'calc(100vh - 220px)' }}
+        ref={listRef}
+      >
         {/* PTR header (deslize para atualizar) */}
         <div
-          className="relative overflow-auto"
-          style={{ maxHeight: 'calc(100vh - 220px)' }}
-          ref={listRef}
+          className="flex items-center justify-center text-xs text-gray-500 dark:text-slate-400 transition-all"
+          style={{ height: `${offset}px` }}
         >
-          <div
-            className="flex items-center justify-center text-xs text-gray-500 dark:text-slate-400 transition-all"
-            style={{ height: `${offset}px` }}
-          >
-            {refreshing ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Atualizando…
-              </span>
-            ) : offset > 0 ? 'Solte para atualizar' : null}
-          </div>
-
-          {loading ? (
-            <div className="p-5 sm:p-6 text-center text-gray-500 dark:text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin inline-block mr-2" />
-              Carregando equipe…
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200 dark:divide-slate-800">
-              {filtered.map((m) => (
-                <div key={m.id} className="p-3 sm:p-5 flex items-center gap-3 sm:gap-4">
-                  {/* Avatar responsivo */}
-                  <Avatar
-                    name={m.full_name}
-                    src={m.profile_pic || null}
-                    size={48}
-                    className="sm:!w-14 sm:!h-14"
-                  />
-
-                  {/* Conteúdo */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                      <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-100 truncate">
-                        {m.full_name}
-                      </div>
-
-                      {m.is_active ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 rounded-full
-                                         bg-emerald-50 text-emerald-700 border border-emerald-200
-                                         dark:bg-emerald-900/20 dark:text-emerald-200 dark:border-emerald-800">
-                          <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Ativo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 rounded-full
-                                         bg-gray-50 text-gray-600 border border-gray-200
-                                         dark:bg-white/5 dark:text-slate-300 dark:border-slate-700">
-                          Inativo
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Linha de meta info */}
-                    <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-300 flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span className="inline-flex items-center gap-1.5">
-                        <Store className="w-4 h-4 opacity-80" />
-                        <span className="truncate max-w-[10rem] sm:max-w-none">{m.store_name || '—'}</span>
-                      </span>
-
-                      {m.email && (
-                        <a className="inline-flex items-center gap-1.5 hover:underline" href={`mailto:${m.email}`}>
-                          <Mail className="w-4 h-4 opacity-80" />
-                          <span className="truncate max-w-[9rem] sm:max-w-none">{m.email}</span>
-                        </a>
-                      )}
-
-                      {m.phone && (
-                        <a className="inline-flex items-center gap-1.5 hover:underline" href={`tel:${onlyDigits(m.phone)}`}>
-                          <Phone className="w-4 h-4 opacity-80" />
-                          {fmtPhoneBr(m.phone)}
-                        </a>
-                      )}
-
-                      <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 dark:text-slate-400">
-                        {m.service_count || 0} serviço(s)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Ações */}
-                  <div className="shrink-0">
-                    {/* Mobile: ícone */}
-                    <button
-                      onClick={() => openEdit(m)}
-                      className="sm:hidden inline-grid place-items-center size-9 rounded-xl
-                                 border border-gray-200 dark:border-slate-700
-                                 bg-white dark:bg-slate-900/70
-                                 text-gray-800 dark:text-slate-100
-                                 hover:bg-gray-50 dark:hover:bg-slate-800"
-                      aria-label="Editar membro"
-                      title="Editar membro"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-
-                    {/* Desktop: botão com label */}
-                    <button
-                      onClick={() => openEdit(m)}
-                      className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl
-                                 border border-gray-200 dark:border-slate-700
-                                 bg-white dark:bg-slate-900/70
-                                 text-gray-800 dark:text-slate-100
-                                 hover:bg-gray-50 dark:hover:bg-slate-800"
-                      title="Editar membro"
-                    >
-                      <Pencil className="w-4 h-4" />
-                      Editar
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {filtered.length === 0 && (
-                <div className="p-5 sm:p-6 text-center text-gray-500 dark:text-slate-400">
-                  Nenhum membro corresponde à busca.
-                </div>
-              )}
-            </div>
-          )}
+          {refreshing ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Atualizando…
+            </span>
+          ) : offset > 0 ? 'Solte para atualizar' : null}
         </div>
-      </Card>
+
+        {loading ? (
+          <div className="p-5 sm:p-6 text-center text-gray-500 dark:text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin inline-block mr-2" />
+            Carregando equipe…
+          </div>
+        ) : (
+          /* Lista em coluna com gaps e somente os mini-cards */
+          <div className="flex flex-col gap-2 sm:gap-3 px-1 sm:px-0 pb-3 sm:pb-4">
+            {filtered.map((m) => (
+              <div
+                key={m.id}
+                className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4
+                           rounded-2xl border border-gray-200/70 dark:border-slate-800/60
+                           bg-white dark:bg-slate-900/60
+                           shadow-sm hover:shadow transition
+                           hover:bg-gray-50 dark:hover:bg-slate-800/70"
+              >
+                {/* Avatar */}
+                <Avatar
+                  name={m.full_name}
+                  src={m.profile_pic || null}
+                  size={48}
+                  className="sm:!w-14 sm:!h-14"
+                />
+
+                {/* Conteúdo */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                    <div className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-100 truncate">
+                      {m.full_name}
+                    </div>
+
+                    {m.is_active ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 rounded-full
+                                       bg-emerald-50 text-emerald-700 border border-emerald-200
+                                       dark:bg-emerald-900/25 dark:text-emerald-200 dark:border-emerald-800">
+                        <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Ativo
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-1.5 py-0.5 sm:px-2 rounded-full
+                                       bg-gray-50 text-gray-600 border border-gray-200
+                                       dark:bg-white/5 dark:text-slate-300 dark:border-slate-700">
+                        Inativo
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Linha de meta info */}
+                  <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-300 flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Store className="w-4 h-4 opacity-80" />
+                      <span className="truncate max-w-[10rem] sm:max-w-none">{m.store_name || '—'}</span>
+                    </span>
+
+                    {m.email && (
+                      <a className="inline-flex items-center gap-1.5 hover:underline" href={`mailto:${m.email}`}>
+                        <Mail className="w-4 h-4 opacity-80" />
+                        <span className="truncate max-w-[9rem] sm:max-w-none">{m.email}</span>
+                      </a>
+                    )}
+
+                    {m.phone && (
+                      <a className="inline-flex items-center gap-1.5 hover:underline" href={`tel:${onlyDigits(m.phone)}`}>
+                        <Phone className="w-4 h-4 opacity-80" />
+                        {fmtPhoneBr(m.phone)}
+                      </a>
+                    )}
+
+                    <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-gray-500 dark:text-slate-400">
+                      {m.service_count || 0} serviço(s)
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ações */}
+                <div className="shrink-0">
+                  {/* Mobile: ícone */}
+                  <button
+                    onClick={() => openEdit(m)}
+                    className="sm:hidden inline-grid place-items-center size-9 rounded-xl
+                               border border-gray-200 dark:border-slate-700
+                               bg-white dark:bg-slate-900/70
+                               text-gray-800 dark:text-slate-100
+                               hover:bg-gray-50 dark:hover:bg-slate-800"
+                    aria-label="Editar membro"
+                    title="Editar membro"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+
+                  {/* Desktop: botão com label */}
+                  <button
+                    onClick={() => openEdit(m)}
+                    className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl
+                               border border-gray-200 dark:border-slate-700
+                               bg-white dark:bg-slate-900/70
+                               text-gray-800 dark:text-slate-100
+                               hover:bg-gray-50 dark:hover:bg-slate-800"
+                    title="Editar membro"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {filtered.length === 0 && (
+              <div className="p-5 sm:p-6 text-center text-gray-500 dark:text-slate-400">
+                Nenhum membro corresponde à busca.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* FAB 'Novo' apenas no mobile */}
       <button
