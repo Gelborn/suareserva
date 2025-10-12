@@ -14,7 +14,7 @@ import {
   CheckCheck,
   EyeOff,
   RotateCcw,
-  ChevronUp,
+  ChevronsUpDown,
   Check,
 } from "lucide-react";
 import { useParams } from "react-router-dom";
@@ -70,7 +70,7 @@ const formatInTimeZone = (date: Date, timeZone: string, fmt: string, opts?: any)
     : format(utcToZonedTime(date, timeZone), fmt, opts);
 
 /* -------------------------------------------------------------------------- */
-/*                                   HELPERS                                  */
+/*                               helpers & hooks                               */
 /* -------------------------------------------------------------------------- */
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -87,6 +87,21 @@ const parseHH = (t?: string | null) => {
   if (Number.isNaN(H)) return null;
   return H * 60 + (Number.isNaN(M) ? 0 : M);
 };
+
+// hook para detectar mobile via JS (não só por classe)
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width:${breakpoint - 1}px)`);
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 /* -------------------------------------------------------------------------- */
 /*                                   STATUS                                   */
@@ -278,7 +293,7 @@ const Agenda: React.FC = () => {
   const [view, setView] = useState<"day" | "week">("day"); // DIA default
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // força "Dia" no mobile
+  // força "Dia" no mobile (e mantém botões no desktop)
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const handler = (e: MediaQueryListEvent) => {
@@ -965,6 +980,50 @@ const SkeletonLine: React.FC<{ className?: string }> = ({ className = "" }) => (
   <div className={`animate-pulse rounded-md bg-gray-200/70 dark:bg-gray-800/70 h-10 ${className}`} />
 );
 
+/* ------------------------------- CONFIRM MODAL ------------------------------ */
+
+const ConfirmDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  tone?: "danger" | "ok";
+}> = ({ open, onClose, onConfirm, title, description, confirmLabel = "Confirmar", tone = "ok" }) => {
+  if (!open) return null;
+  const danger =
+    tone === "danger"
+      ? "bg-rose-600 hover:bg-rose-700 text-white"
+      : "bg-indigo-600 hover:bg-indigo-700 text-white";
+  return (
+    <div className="fixed inset-0 z-[60]">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-x-0 top-20 mx-auto w-[92%] max-w-md">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl">
+          <div className="p-5">
+            <h4 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h4>
+            {description && (
+              <p className="mt-1.5 text-sm text-gray-700 dark:text-gray-300">{description}</p>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                onClick={onClose}
+                className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
+              >
+                Voltar
+              </button>
+              <button onClick={onConfirm} className={`px-3 py-2 rounded-xl ${danger}`}>
+                {confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ---------------------------------- MODAL --------------------------------- */
 
 const ActionButton: React.FC<React.PropsWithChildren<{ onClick?: () => void; className?: string; title?: string }>> = ({
@@ -982,7 +1041,7 @@ const ActionButton: React.FC<React.PropsWithChildren<{ onClick?: () => void; cla
   </button>
 );
 
-// Mobile dropdown de status (bonitinho)
+// Mobile dropdown de status (Headless UI)
 const StatusPickerMobile: React.FC<{
   current: StatusKey;
   onChange: (next: StatusKey) => void;
@@ -1001,15 +1060,11 @@ const StatusPickerMobile: React.FC<{
             {statusLabel(current)}
           </span>
           <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-            <ChevronUp className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <ChevronsUpDown className="h-4 w-4 text-gray-500 dark:text-gray-400" />
           </span>
         </Listbox.Button>
-        <Transition
-          leave="transition ease-in duration-100"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <Listbox.Options className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
+        <Transition leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <Listbox.Options className="absolute z-[70] mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
             {options.map((s) => {
               const Icon = statusIcon(s);
               return (
@@ -1052,6 +1107,7 @@ const AppointmentModal: React.FC<{
 }> = ({ open, onClose, appointment, tz, slotMin, onUpdateStatus, onSaveTime }) => {
   const [hhmm, setHhmm] = useState<string>(() => (appointment ? appointment.time : "09:00"));
   const [dur, setDur] = useState<number>(() => appointment?.duration ?? slotMin);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setHhmm(appointment?.time ?? "09:00");
@@ -1066,6 +1122,15 @@ const AppointmentModal: React.FC<{
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
+  // confirmação
+  const [confirm, setConfirm] = useState<{ open: boolean; next: StatusKey | null }>({ open: false, next: null });
+  const askConfirm = (next: StatusKey) => setConfirm({ open: true, next });
+  const doConfirm = () => {
+    if (!appointment || !confirm.next) return;
+    onUpdateStatus(appointment.id, confirm.next);
+    setConfirm({ open: false, next: null });
+  };
+
   if (!open || !appointment) return null;
   const s = statusStyles(appointment.status);
 
@@ -1079,11 +1144,24 @@ const AppointmentModal: React.FC<{
   // opções de duração (múltiplos do slot)
   const durationOptions = Array.from({ length: 8 }, (_, i) => (i + 1) * slotMin);
 
+  // mensagens da confirmação
+  const confirmCopy = (next: StatusKey) =>
+    next === "cancelled"
+      ? { title: "Cancelar agendamento?", desc: "Essa ação marca o agendamento como cancelado." , tone: "danger" as const, cta: "Cancelar" }
+      : next === "no_show"
+      ? { title: "Marcar como 'Não compareceu'?", desc: "O cliente não compareceu ao horário.", tone: "danger" as const, cta: "Marcar" }
+      : next === "completed"
+      ? { title: "Concluir agendamento?", desc: "Marcar como concluído.", tone: "ok" as const, cta: "Concluir" }
+      : next === "confirmed"
+      ? { title: "Confirmar agendamento?", desc: "O cliente está confirmado.", tone: "ok" as const, cta: "Confirmar" }
+      : { title: "Reabrir como pendente?", desc: "Voltará ao status pendente.", tone: "ok" as const, cta: "Reabrir" };
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-x-0 top-12 mx-auto w-[95%] max-w-lg">
-        <div className={`rounded-2xl border ${s.badge} shadow-xl overflow-hidden`}>
+        {/* remove overflow-hidden para dropdown não ser cortado */}
+        <div className={`rounded-2xl border ${s.badge} shadow-xl`}>
           <div className="p-4 md:p-5 flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
@@ -1142,75 +1220,88 @@ const AppointmentModal: React.FC<{
               </ActionButton>
             </div>
 
-            {/* Status — desktop: botões; mobile: dropdown */}
+            {/* Status — mobile: dropdown; desktop: botões */}
             <div className="flex flex-col gap-2 pt-2">
-              {/* mobile */}
-              <div className="md:hidden">
-                <label className="text-xs block mb-1 opacity-80">Status</label>
-                <StatusPickerMobile
-                  current={appointment.status}
-                  onChange={(next) => {
-                    if (next !== appointment.status) onUpdateStatus(appointment.id, next);
-                  }}
-                />
-              </div>
-
-              {/* desktop */}
-              <div className="hidden md:flex flex-wrap items-center gap-2">
-                <ActionButton
-                  onClick={() => onUpdateStatus(appointment.id, "confirmed")}
-                  className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${
-                    disabled.confirm ? "opacity-50 pointer-events-none" : ""
-                  }`}
-                  title="Confirmar"
-                >
-                  <CheckCircle2 className="w-4 h-4" /> Confirmar
-                </ActionButton>
-
-                <ActionButton
-                  onClick={() => onUpdateStatus(appointment.id, "cancelled")}
-                  className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${
-                    disabled.cancel ? "opacity-50 pointer-events-none" : ""
-                  }`}
-                  title="Cancelar"
-                >
-                  <Ban className="w-4 h-4" /> Cancelar
-                </ActionButton>
-
-                <ActionButton
-                  onClick={() => onUpdateStatus(appointment.id, "completed")}
-                  className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${
-                    disabled.complete ? "opacity-50 pointer-events-none" : ""
-                  }`}
-                  title="Concluir"
-                >
-                  <CheckCheck className="w-4 h-4" /> Concluir
-                </ActionButton>
-
-                <ActionButton
-                  onClick={() => onUpdateStatus(appointment.id, "no_show")}
-                  className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${
-                    disabled.noShow ? "opacity-50 pointer-events-none" : ""
-                  }`}
-                  title="Marcar não compareceu"
-                >
-                  <EyeOff className="w-4 h-4" /> Não compareceu
-                </ActionButton>
-
-                {(appointment.status === "cancelled" || appointment.status === "no_show") && (
+              {isMobile ? (
+                <>
+                  <label className="text-xs block mb-1 opacity-80">Status</label>
+                  <StatusPickerMobile
+                    current={appointment.status}
+                    onChange={(next) => {
+                      if (next !== appointment.status) {
+                        askConfirm(next);
+                      }
+                    }}
+                  />
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
                   <ActionButton
-                    onClick={() => onUpdateStatus(appointment.id, "pending")}
-                    className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
-                    title="Reabrir como pendente"
+                    onClick={() => askConfirm("confirmed")}
+                    className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${
+                      disabled.confirm ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                    title="Confirmar"
                   >
-                    <RotateCcw className="w-4 h-4" /> Reabrir
+                    <CheckCircle2 className="w-4 h-4" /> Confirmar
                   </ActionButton>
-                )}
-              </div>
+
+                  <ActionButton
+                    onClick={() => askConfirm("cancelled")}
+                    className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${
+                      disabled.cancel ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                    title="Cancelar"
+                  >
+                    <Ban className="w-4 h-4" /> Cancelar
+                  </ActionButton>
+
+                  <ActionButton
+                    onClick={() => askConfirm("completed")}
+                    className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${
+                      disabled.complete ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                    title="Concluir"
+                  >
+                    <CheckCheck className="w-4 h-4" /> Concluir
+                  </ActionButton>
+
+                  <ActionButton
+                    onClick={() => askConfirm("no_show")}
+                    className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${
+                      disabled.noShow ? "opacity-50 pointer-events-none" : ""
+                    }`}
+                    title="Marcar não compareceu"
+                  >
+                    <EyeOff className="w-4 h-4" /> Não compareceu
+                  </ActionButton>
+
+                  {(appointment.status === "cancelled" || appointment.status === "no_show") && (
+                    <ActionButton
+                      onClick={() => askConfirm("pending")}
+                      className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
+                      title="Reabrir como pendente"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Reabrir
+                    </ActionButton>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Confirmação */}
+      <ConfirmDialog
+        open={confirm.open}
+        onClose={() => setConfirm({ open: false, next: null })}
+        onConfirm={doConfirm}
+        title={confirm.next ? confirmCopy(confirm.next).title : "Confirmar?"}
+        description={confirm.next ? confirmCopy(confirm.next).desc : undefined}
+        confirmLabel={confirm.next ? confirmCopy(confirm.next).cta : "Confirmar"}
+        tone={confirm.next ? confirmCopy(confirm.next).tone : "ok"}
+      />
     </div>
   );
 };
