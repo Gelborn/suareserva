@@ -82,9 +82,23 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
         .lt('start_ts', rangeEnd.toISOString())
         .order('start_ts');
 
-      if (bookingsErr) throw bookingsErr;
+      let bookedRows: BookedRow[] = [];
+      let fallbackWarning: string | null = null;
 
-      const busy = (data ?? [])
+      if (bookingsErr) {
+        const code = bookingsErr.code || '';
+        const rlsIssue = code === '42501' || code === '42P17';
+        if (rlsIssue) {
+          fallbackWarning =
+            'Não conseguimos validar reservas existentes em tempo real. Escolha o horário desejado e confirmaremos manualmente com a loja.';
+        } else {
+          throw bookingsErr;
+        }
+      } else {
+        bookedRows = (data ?? []) as BookedRow[];
+      }
+
+      const busy = bookedRows
         .filter((row: BookedRow) => BUSY_STATUSES.has(row.status))
         .map((row: BookedRow) => ({
           start: new Date(row.start_ts),
@@ -167,6 +181,7 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
         list.sort((a, b) => a.start.getTime() - b.start.getTime())
       );
 
+      setError(fallbackWarning);
       setSlotsByDay(dayMap);
       setDays(dayList);
     } catch (err) {

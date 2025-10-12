@@ -88,21 +88,6 @@ const parseHH = (t?: string | null) => {
   return H * 60 + (Number.isNaN(M) ? 0 : M);
 };
 
-// hook para detectar mobile via JS (não só por classe)
-function useIsMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width:${breakpoint - 1}px)`);
-    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    setIsMobile(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [breakpoint]);
-  return isMobile;
-}
-
 /* -------------------------------------------------------------------------- */
 /*                                   STATUS                                   */
 /* -------------------------------------------------------------------------- */
@@ -293,7 +278,7 @@ const Agenda: React.FC = () => {
   const [view, setView] = useState<"day" | "week">("day"); // DIA default
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // força "Dia" no mobile (e mantém botões no desktop)
+  // força "Dia" no mobile (e mantém botões no desktop), usando media query direto
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const handler = (e: MediaQueryListEvent) => {
@@ -1107,7 +1092,6 @@ const AppointmentModal: React.FC<{
 }> = ({ open, onClose, appointment, tz, slotMin, onUpdateStatus, onSaveTime }) => {
   const [hhmm, setHhmm] = useState<string>(() => (appointment ? appointment.time : "09:00"));
   const [dur, setDur] = useState<number>(() => appointment?.duration ?? slotMin);
-  const isMobile = useIsMobile();
 
   useEffect(() => {
     setHhmm(appointment?.time ?? "09:00");
@@ -1220,73 +1204,73 @@ const AppointmentModal: React.FC<{
               </ActionButton>
             </div>
 
-            {/* Status — mobile: dropdown; desktop: botões */}
+            {/* Status — mobile: dropdown; desktop: botões (CSS responsivo) */}
             <div className="flex flex-col gap-2 pt-2">
-              {isMobile ? (
-                <>
-                  <label className="text-xs block mb-1 opacity-80">Status</label>
-                  <StatusPickerMobile
-                    current={appointment.status}
-                    onChange={(next) => {
-                      if (next !== appointment.status) {
-                        askConfirm(next);
-                      }
-                    }}
-                  />
-                </>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <ActionButton
-                    onClick={() => askConfirm("confirmed")}
-                    className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${
-                      disabled.confirm ? "opacity-50 pointer-events-none" : ""
-                    }`}
-                    title="Confirmar"
-                  >
-                    <CheckCircle2 className="w-4 h-4" /> Confirmar
-                  </ActionButton>
+              {/* Mobile: dropdown */}
+              <div className="md:hidden">
+                <label className="text-xs block mb-1 opacity-80">Status</label>
+                <StatusPickerMobile
+                  current={appointment.status}
+                  onChange={(next) => {
+                    if (next !== appointment.status) {
+                      askConfirm(next);
+                    }
+                  }}
+                />
+              </div>
 
-                  <ActionButton
-                    onClick={() => askConfirm("cancelled")}
-                    className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${
-                      disabled.cancel ? "opacity-50 pointer-events-none" : ""
-                    }`}
-                    title="Cancelar"
-                  >
-                    <Ban className="w-4 h-4" /> Cancelar
-                  </ActionButton>
+              {/* Desktop: botões */}
+              <div className="hidden md:flex flex-wrap items-center gap-2">
+                <ActionButton
+                  onClick={() => askConfirm("confirmed")}
+                  className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${
+                    disabled.confirm ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                  title="Confirmar"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Confirmar
+                </ActionButton>
 
-                  <ActionButton
-                    onClick={() => askConfirm("completed")}
-                    className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${
-                      disabled.complete ? "opacity-50 pointer-events-none" : ""
-                    }`}
-                    title="Concluir"
-                  >
-                    <CheckCheck className="w-4 h-4" /> Concluir
-                  </ActionButton>
+                <ActionButton
+                  onClick={() => askConfirm("cancelled")}
+                  className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${
+                    disabled.cancel ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                  title="Cancelar"
+                >
+                  <Ban className="w-4 h-4" /> Cancelar
+                </ActionButton>
 
-                  <ActionButton
-                    onClick={() => askConfirm("no_show")}
-                    className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${
-                      disabled.noShow ? "opacity-50 pointer-events-none" : ""
-                    }`}
-                    title="Marcar não compareceu"
-                  >
-                    <EyeOff className="w-4 h-4" /> Não compareceu
-                  </ActionButton>
+                <ActionButton
+                  onClick={() => askConfirm("completed")}
+                  className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${
+                    disabled.complete ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                  title="Concluir"
+                >
+                  <CheckCheck className="w-4 h-4" /> Concluir
+                </ActionButton>
 
-                  {(appointment.status === "cancelled" || appointment.status === "no_show") && (
-                    <ActionButton
-                      onClick={() => askConfirm("pending")}
-                      className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
-                      title="Reabrir como pendente"
-                    >
-                      <RotateCcw className="w-4 h-4" /> Reabrir
-                    </ActionButton>
-                  )}
-                </div>
-              )}
+                <ActionButton
+                  onClick={() => askConfirm("no_show")}
+                  className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${
+                    disabled.noShow ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                  title="Marcar não compareceu"
+                >
+                  <EyeOff className="w-4 h-4" /> Não compareceu
+                </ActionButton>
+
+                {(appointment.status === "cancelled" || appointment.status === "no_show") && (
+                  <ActionButton
+                    onClick={() => askConfirm("pending")}
+                    className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
+                    title="Reabrir como pendente"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Reabrir
+                  </ActionButton>
+                )}
+              </div>
             </div>
           </div>
         </div>
