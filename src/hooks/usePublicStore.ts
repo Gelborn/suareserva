@@ -36,14 +36,9 @@ export function usePublicStore(slug?: string | null) {
     setNotFound(false);
 
     try {
-      const { data: storeRow, error: storeErr } = await supabase
-        .from('stores')
-        .select('*')
-        .eq('slug', slug)
-        .maybeSingle();
-
-      if (storeErr) throw storeErr;
-      if (!storeRow) {
+      const { data, error: rpcError } = await supabase.rpc('get_public_store', { p_slug: slug });
+      if (rpcError) throw rpcError;
+      if (!data) {
         setStore(null);
         setNotFound(true);
         setServices([]);
@@ -51,82 +46,75 @@ export function usePublicStore(slug?: string | null) {
         return;
       }
 
-      const storeId = (storeRow as StoreRow).id;
+      const payload = data as {
+        store: StoreRow | null;
+        hours: StoreHourRow[] | null;
+        services: Array<
+          PublicService & {
+            providers?: PublicTeamMember[];
+            service_providers?: any;
+          }
+        > | null;
+      };
 
-      const [hoursRes, servicesRes] = await Promise.all([
-        supabase
-          .from('store_hours')
-          .select('*')
-          .eq('store_id', storeId)
-          .order('day_of_week'),
-        supabase
-          .from('services')
-          .select(
-            `
-            id,
-            business_id,
-            store_id,
-            name,
-            description,
-            duration_min,
-            price_cents,
-            is_active,
-            color,
-            service_pic,
-            created_at,
-            updated_at,
-            service_providers (
-              team_members:team_members!service_providers_team_member_id_fkey (
-                id,
-                full_name,
-                profile_pic,
-                max_parallel,
-                is_active
-              )
-            )
-          `
-          )
-          .eq('store_id', storeId)
-          .eq('is_active', true)
-          .order('name'),
-      ]);
+      if (!payload.store) {
+        setStore(null);
+        setNotFound(true);
+        setServices([]);
+        setHours([]);
+        return;
+      }
 
-      if (hoursRes.error) throw hoursRes.error;
-      if (servicesRes.error) throw servicesRes.error;
+      const normalizedHours = Array.isArray(payload.hours)
+        ? (payload.hours as StoreHourRow[]).map((row) => ({
+            ...row,
+            day_of_week: Number(row.day_of_week),
+            is_closed: Boolean(row.is_closed),
+          }))
+        : [];
 
-      const svcList: PublicService[] = (servicesRes.data ?? []).map((svc: any) => {
-        const providerLinks = Array.isArray(svc.service_providers) ? svc.service_providers : [];
-        const providers: PublicTeamMember[] = providerLinks
-          .map((link: any) => link?.team_members ?? null)
-          .filter((tm: any) => tm && (tm.is_active ?? true))
-          .map((tm: any) => ({
-            id: tm.id,
-            full_name: tm.full_name,
-            profile_pic: tm.profile_pic ?? null,
-            max_parallel: tm.max_parallel ?? 1,
-          }));
+      const normalizedServices: PublicService[] = Array.isArray(payload.services)
+        ? payload.services.map((svc: any) => {
+            const providersSrc = Array.isArray(svc.providers)
+              ? svc.providers
+              : Array.isArray(svc.service_providers)
+              ? svc.service_providers
+              : [];
+            const providers: PublicTeamMember[] = providersSrc
+              .map((raw: any) => {
+                const tm = raw?.team_members ?? raw;
+                if (!tm) return null;
+                return tm;
+              })
+              .filter((tm: any) => tm && (tm.is_active ?? true))
+              .map((tm: any) => ({
+                id: tm.id,
+                full_name: tm.full_name,
+                profile_pic: tm.profile_pic ?? null,
+                max_parallel: tm.max_parallel ?? 1,
+              }));
 
-        const mapped: PublicService = {
-          id: svc.id,
-          business_id: svc.business_id,
-          store_id: svc.store_id,
-          name: svc.name,
-          description: svc.description ?? null,
-          duration_min: svc.duration_min,
-          price_cents: svc.price_cents,
-          is_active: true,
-          color: svc.color ?? null,
-          service_pic: svc.service_pic ?? null,
-          created_at: svc.created_at ?? null,
-          updated_at: svc.updated_at ?? null,
-          providers,
-        };
-        return mapped;
-      });
+            return {
+              id: svc.id,
+              business_id: svc.business_id,
+              store_id: svc.store_id,
+              name: svc.name,
+              description: svc.description ?? null,
+              duration_min: svc.duration_min,
+              price_cents: svc.price_cents,
+              is_active: true,
+              color: svc.color ?? null,
+              service_pic: svc.service_pic ?? null,
+              created_at: svc.created_at ?? null,
+              updated_at: svc.updated_at ?? null,
+              providers,
+            };
+          })
+        : [];
 
-      setStore(storeRow as StoreRow);
-      setHours((hoursRes.data ?? []) as StoreHourRow[]);
-      setServices(svcList);
+      setStore(payload.store);
+      setHours(normalizedHours);
+      setServices(normalizedServices);
       setNotFound(false);
       setError(null);
     } catch (e: any) {
