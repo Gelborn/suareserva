@@ -438,130 +438,144 @@ const Agenda: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-200/60 dark:border-gray-800/60 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/40 dark:via-gray-950 dark:to-purple-950/30 p-5 md:p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 mb-1">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-wide font-semibold">SuaReserva · Agenda</span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900 dark:text-white truncate">
-              {periodTitle}
-            </h1>
-            <p className="text-sm text-gray-800/80 dark:text-gray-300 mt-1">
-              {subCaption}
-              {store ? ` · ${store.name}` : ""}
-            </p>
-          </div>
+      {/* Header (gradiente com recorte sem cortar dropdown) */}
+      <div className="relative rounded-2xl border border-gray-200/60 dark:border-gray-800/60">
+        {/* Camada de fundo com overflow-hidden apenas para o gradiente */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/40 dark:via-gray-950 dark:to-purple-950/30" />
+        </div>
 
-          {/* Controls */}
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full md:w-auto">
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/70 p-1">
-                {(["all", ...ALL_STATUSES] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s as any)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      statusFilter === s
-                        ? "bg-gray-900/90 dark:bg-white/10 text-white dark:text-white"
-                        : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
-                    }`}
-                    aria-pressed={statusFilter === s}
-                    title={s === "all" ? "Todos os status" : statusLabel(s as StatusKey)}
-                  >
-                    {s === "all" ? "Todos" : statusLabel(s as StatusKey)}
-                  </button>
-                ))}
+        {/* Conteúdo acima do fundo */}
+        <div className="relative p-5 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 mb-1">
+                <Sparkles className="h-4 w-4" />
+                <span className="text-xs uppercase tracking-wide font-semibold">SuaReserva · Agenda</span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900 dark:text-white truncate">
+                {periodTitle}
+              </h1>
+              <p className="text-sm text-gray-800/80 dark:text-gray-300 mt-1">
+                {subCaption}
+                {store ? ` · ${store.name}` : ""}
+              </p>
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full md:w-auto">
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {/* Mobile: dropdown de status */}
+                <div className="md:hidden w-full">
+                  <StatusFilterDropdown value={statusFilter} onChange={(v) => setStatusFilter(v)} />
+                </div>
+
+                {/* Desktop: segmentado de status */}
+                <div className="hidden md:inline-flex rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/70 p-1">
+                  {(["all", ...ALL_STATUSES] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusFilter(s as any)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                        statusFilter === s
+                          ? "bg-gray-900/90 dark:bg-white/10 text-white dark:text-white"
+                          : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
+                      }`}
+                      aria-pressed={statusFilter === s}
+                      title={s === "all" ? "Todos os status" : statusLabel(s as StatusKey)}
+                    >
+                      {s === "all" ? "Todos" : statusLabel(s as StatusKey)}
+                    </button>
+                  ))}
+                </div>
+
+                {services.length > 0 && (
+                  <div className="relative">
+                    <select
+                      value={serviceFilter}
+                      onChange={(e) => setServiceFilter(e.target.value)}
+                      className="appearance-none pr-8 pl-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="all">Todos os serviços</option>
+                      {services.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Filter className="h-4 w-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300 pointer-events-none" />
+                  </div>
+                )}
+
+                {providers.length > 0 && (
+                  <div className="relative">
+                    <select
+                      value={providerFilter}
+                      onChange={(e) => setProviderFilter(e.target.value)}
+                      className="appearance-none pr-8 pl-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="all">Qualquer profissional</option>
+                      {providers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <User className="h-4 w-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300 pointer-events-none" />
+                  </div>
+                )}
               </div>
 
-              {services.length > 0 && (
-                <div className="relative">
-                  <select
-                    value={serviceFilter}
-                    onChange={(e) => setServiceFilter(e.target.value)}
-                    className="appearance-none pr-8 pl-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-sm text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="all">Todos os serviços</option>
-                    {services.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <Filter className="h-4 w-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300 pointer-events-none" />
-                </div>
-              )}
+              {/* Segmented (desktop) */}
+              <div className="hidden md:inline-flex p-1 rounded-xl bg-gray-100/80 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setView("day")}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
+                    view === "day"
+                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                  aria-pressed={view === "day"}
+                >
+                  Dia
+                </button>
+                <button
+                  onClick={() => setView("week")}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
+                    view === "week"
+                      ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                      : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
+                  }`}
+                  aria-pressed={view === "week"}
+                >
+                  Semana
+                </button>
+              </div>
 
-              {providers.length > 0 && (
-                <div className="relative">
-                  <select
-                    value={providerFilter}
-                    onChange={(e) => setProviderFilter(e.target.value)}
-                    className="appearance-none pr-8 pl-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-sm text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="all">Qualquer profissional</option>
-                    {providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <User className="h-4 w-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 dark:text-gray-300 pointer-events-none" />
-                </div>
-              )}
-            </div>
-
-            {/* Segmented (desktop) */}
-            <div className="hidden md:inline-flex p-1 rounded-xl bg-gray-100/80 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setView("day")}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-                  view === "day"
-                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
-                }`}
-                aria-pressed={view === "day"}
-              >
-                Dia
-              </button>
-              <button
-                onClick={() => setView("week")}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-                  view === "week"
-                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
-                    : "text-gray-900 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white"
-                }`}
-                aria-pressed={view === "week"}
-              >
-                Semana
-              </button>
-            </div>
-
-            {/* Navegação */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goPrev}
-                className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 transition-colors"
-                aria-label={view === "day" ? "Dia anterior" : "Semana anterior"}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={goToday}
-                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 text-sm font-medium"
-              >
-                Hoje
-              </button>
-              <button
-                onClick={goNext}
-                className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 transition-colors"
-                aria-label={view === "day" ? "Próximo dia" : "Próxima semana"}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
+              {/* Navegação */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={goPrev}
+                  className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                  aria-label={view === "day" ? "Dia anterior" : "Semana anterior"}
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={goToday}
+                  className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 text-sm font-medium"
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={goNext}
+                  className="p-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                  aria-label={view === "day" ? "Próximo dia" : "Próxima semana"}
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -708,6 +722,62 @@ const AppointmentCard: React.FC<{ a: UiAppointment; onClick?: (a: UiAppointment)
         </div>
       </button>
     </div>
+  );
+};
+
+/* -------- StatusFilterDropdown (MOBILE, header) -------- */
+const StatusFilterDropdown: React.FC<{
+  value: StatusKey | "all";
+  onChange: (next: StatusKey | "all") => void;
+}> = ({ value, onChange }) => {
+  const options: Array<StatusKey | "all"> = ["all", ...ALL_STATUSES];
+  const CurrentIcon = value === "all" ? Filter : statusIcon(value as StatusKey);
+
+  return (
+    <Listbox value={value} onChange={onChange}>
+      <div className="relative w-full">
+        <Listbox.Button
+          className="relative w-full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
+          aria-label="Filtrar status"
+        >
+          <span className="flex items-center gap-2">
+            <CurrentIcon className="h-4 w-4" />
+            {value === "all" ? "Todos os status" : statusLabel(value as StatusKey)}
+          </span>
+          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+            <ChevronsUpDown className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+          </span>
+        </Listbox.Button>
+        <Transition leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <Listbox.Options className="absolute z-[70] mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
+            {options.map((opt) => {
+              const Icon = opt === "all" ? Filter : statusIcon(opt as StatusKey);
+              return (
+                <Listbox.Option
+                  key={opt}
+                  value={opt}
+                  className={({ active }) =>
+                    `cursor-pointer select-none px-3 py-2 text-sm flex items-center justify-between ${
+                      active ? "bg-gray-100 dark:bg-gray-800" : ""
+                    } text-gray-900 dark:text-gray-100`
+                  }
+                >
+                  {({ selected }) => (
+                    <>
+                      <span className="flex items-center gap-2">
+                        <Icon className="h-4 w-4" />
+                        {opt === "all" ? "Todos os status" : statusLabel(opt as StatusKey)}
+                      </span>
+                      {selected && <Check className="h-4 w-4" />}
+                    </>
+                  )}
+                </Listbox.Option>
+              );
+            })}
+          </Listbox.Options>
+        </Transition>
+      </div>
+    </Listbox>
   );
 };
 
@@ -1026,7 +1096,7 @@ const ActionButton: React.FC<React.PropsWithChildren<{ onClick?: () => void; cla
   </button>
 );
 
-// Mobile dropdown de status (Headless UI)
+// Mobile dropdown de status (no modal)
 const StatusPickerMobile: React.FC<{
   current: StatusKey;
   onChange: (next: StatusKey) => void;
@@ -1131,7 +1201,7 @@ const AppointmentModal: React.FC<{
   // mensagens da confirmação
   const confirmCopy = (next: StatusKey) =>
     next === "cancelled"
-      ? { title: "Cancelar agendamento?", desc: "Essa ação marca o agendamento como cancelado." , tone: "danger" as const, cta: "Cancelar" }
+      ? { title: "Cancelar agendamento?", desc: "Essa ação marca o agendamento como cancelado.", tone: "danger" as const, cta: "Cancelar" }
       : next === "no_show"
       ? { title: "Marcar como 'Não compareceu'?", desc: "O cliente não compareceu ao horário.", tone: "danger" as const, cta: "Marcar" }
       : next === "completed"

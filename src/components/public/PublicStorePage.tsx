@@ -19,6 +19,7 @@ import LoadingScreen from '../ui/LoadingScreen';
 import { usePublicStore } from '../../hooks/usePublicStore';
 import { useAvailability } from '../../hooks/useAvailability';
 import type { PublicService, PublicTeamMember } from '../../hooks/usePublicStore';
+import { supabase } from '../../lib/supabase';
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -428,27 +429,33 @@ const PublicStorePage: React.FC = () => {
     try {
       setCreating(true);
 
-      const payload = {
-        store_id: store.id,
-        service_id: selectedService.id,
-        team_member_id: selectedProvider.id,
-        start_ts: selectedSlot.isoStart,
-        end_ts: selectedSlot.isoEnd,
-        price_cents: selectedService.price_cents,
-        customer_name: customerName.trim(),
-        customer_phone: digitsPhone,
-        customer_email: customerEmail.trim() || null,
-        notes: notes.trim() || null,
-      };
+      const { data, error: fnError } = await supabase.functions.invoke('app/public-booking', {
+        body: {
+          businessId: store.business_id,
+          storeId: store.id,
+          serviceId: selectedService.id,
+          teamMemberId: selectedProvider.id,
+          startTs: selectedSlot.isoStart,
+          endTs: selectedSlot.isoEnd,
+          slug,
+          customer: {
+            name: customerName.trim(),
+            phone: digitsPhone,
+            email: customerEmail.trim() || null,
+            notes: notes.trim() || null,
+          },
+        },
+      });
 
-      // TODO: substituir por chamada a função Edge com service role
-      console.info('Booking payload (preview):', payload);
-      toast.success('Pedido recebido! A loja entrará em contato para confirmar sua reserva.');
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
+
+      toast.success('Reserva solicitada! Vamos te avisar nesse número assim que for confirmada.');
       resetForm();
-      setCreatedBookingId(selectedSlot.isoStart);
+      setCreatedBookingId(data?.booking?.booking_id ?? selectedSlot.isoStart);
     } catch (err: any) {
       console.error(err);
-      toast.error('Não foi possível criar a reserva agora.');
+      toast.error(err?.message ?? 'Não foi possível criar a reserva agora.');
     } finally {
       setCreating(false);
     }
@@ -829,21 +836,21 @@ const PublicStorePage: React.FC = () => {
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(maskPhone(e.target.value))}
                         placeholder="(11) 91234-5678"
-                        className={clsx(
-                          'mt-2 w-full rounded-2xl border px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2',
-                          phoneValid
-                            ? 'border-gray-200 focus:ring-gray-900/10'
-                            : 'border-amber-300 focus:border-amber-400 focus:ring-amber-200'
-                        )}
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        Usaremos esse contato para confirmar o agendamento.
-                      </p>
-                    </div>
+                    className={clsx(
+                      'mt-2 w-full rounded-2xl border px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2',
+                      phoneValid
+                        ? 'border-gray-200 focus:ring-gray-900/10'
+                        : 'border-amber-300 focus:border-amber-400 focus:ring-amber-200'
+                    )}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Vamos usar esse número para enviar confirmações e lembretes pelo WhatsApp/SMS.
+                  </p>
+                </div>
 
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700" htmlFor="customerEmail">
-                        E-mail (opcional)
+                <div>
+                  <label className="text-sm font-semibold text-gray-700" htmlFor="customerEmail">
+                    E-mail (opcional)
                       </label>
                       <input
                         id="customerEmail"

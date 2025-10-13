@@ -112,6 +112,11 @@ const OverviewTab: React.FC<{
     }
   }, [info.slug, editingSlug]);
 
+  // se a loja perder o status ativo, encerra modo de edição (failsafe)
+  React.useEffect(() => {
+    if (!cmp.allGood && editingSlug) setEditingSlug(false);
+  }, [cmp.allGood, editingSlug]);
+
   const checkSlug = React.useCallback(async (raw: string) => {
     const s = prettyUrl(raw);
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) return { available: false };
@@ -264,7 +269,7 @@ const OverviewTab: React.FC<{
           <button
             type="button"
             onClick={handleSave}
-            disabled={status!=='ok' || prettyUrl(slug) === savedSlug}
+            disabled={!cmp.allGood || status!=='ok' || prettyUrl(slug) === savedSlug}
             className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-50"
           >
             Salvar
@@ -287,8 +292,8 @@ const OverviewTab: React.FC<{
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-start-1 lg:col-span-3 p-5">
-        {editingSlug ? (
-          /* — EDIÇÃO ISOLADA — */
+        {(editingSlug && cmp.allGood) ? (
+          /* — EDIÇÃO ISOLADA (somente quando ativo) — */
           <div className={inner}>
             <div className="rounded-2xl border border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 p-4 sm:p-5">
               <h4 className="text-base sm:text-lg font-semibold text-indigo-900 dark:text-indigo-200">Editar link da loja</h4>
@@ -317,7 +322,7 @@ const OverviewTab: React.FC<{
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={status!=='ok' || prettyUrl(slug) === savedSlug}
+                  disabled={!cmp.allGood || status!=='ok' || prettyUrl(slug) === savedSlug}
                   className="rounded-xl px-3 py-2 text-xs sm:text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition disabled:opacity-50"
                 >
                   Salvar
@@ -429,7 +434,8 @@ const OverviewTab: React.FC<{
                       />
                     </div>
 
-                    {SlugEditorBlock}
+                    {/* editor de slug só aparece quando ativo */}
+                    {cmp.allGood && SlugEditorBlock}
                   </>
                 )}
               </>
