@@ -183,13 +183,11 @@ const HoursTab: React.FC<{
       const prevClosed = next[i].is_closed;
       next[i] = { ...next[i], ...patch };
 
-      // se marcar como fechado → limpa horas
       if (patch.is_closed === true) {
         next[i].open_time = null;
         next[i].close_time = null;
       }
 
-      // se reabrir um dia que estava fechado → default suave
       if (prevClosed && patch.is_closed === false) {
         next[i].open_time = next[i].open_time ?? '09:00';
         next[i].close_time = next[i].close_time ?? '18:00';
@@ -228,7 +226,6 @@ const HoursTab: React.FC<{
     try {
       setSaving(true);
 
-      // upsert de todos os 7 dias
       const payload: DbHour[] = localHours.map(h => ({
         store_id: storeId,
         day_of_week: h.day,
@@ -270,46 +267,116 @@ const HoursTab: React.FC<{
 
   /* ── UI ───────────────────────────────────────────────── */
   return (
-    // Folga extra no mobile para PWA / barras
-    <Card className="p-5 relative pb-32 sm:pb-6">
-      {/* Cabeçalho */}
-      <div className="flex items-start gap-3">
-        <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
-          {/* ícone branco no dark */}
-          <Clock className="w-5 h-5 text-gray-700 dark:stroke-white dark:text-white" />
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Horário de funcionamento</h3>
-          <p className="text-sm text-gray-600 dark:text-slate-400">Defina os horários abertos por dia.</p>
-        </div>
-      </div>
+    <>
+      {/* Deixa o ícone nativo invisível e sobrepõe um Clock branco no dark */}
+      <style>{`
+        .dark .time-input { color-scheme: dark; }
 
-      {!storeId && (
-        <div className="mt-4 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5" />
-          Informe um <strong className="ml-1">storeId</strong> para carregar e salvar horários.
+        /* Esconde o ícone nativo do picker (Chrome/Safari) */
+        .time-input::-webkit-calendar-picker-indicator {
+          opacity: 0;
+        }
+        /* Evita clear/spin extras em alguns navegadores */
+        .time-input::-webkit-clear-button,
+        .time-input::-webkit-inner-spin-button,
+        .time-input::-webkit-outer-spin-button {
+          display: none;
+        }
+      `}</style>
+
+      <Card className="p-5 relative pb-32 sm:pb-6">
+        {/* Cabeçalho */}
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-gray-50 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700">
+            <Clock className="w-5 h-5 text-gray-700 dark:stroke-white dark:text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">Horário de funcionamento</h3>
+            <p className="text-sm text-gray-600 dark:text-slate-400">Defina os horários abertos por dia.</p>
+          </div>
         </div>
-      )}
 
-      <div className="mt-5 space-y-6">
-        {/* Editor de dias */}
-        <div className="divide-y rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-          {loading ? (
-            <div className="p-4 text-sm text-gray-600 dark:text-slate-400">Carregando…</div>
-          ) : (
-            localHours.map((d, i) => {
-              const err = errors[d.day] || emptyErr;
-              const hasGeneral = !!err.general;
-              const openErr = !!err.open;
-              const closeErr = !!err.close;
+        {!storeId && (
+          <div className="mt-4 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5" />
+            Informe um <strong className="ml-1">storeId</strong> para carregar e salvar horários.
+          </div>
+        )}
 
-              return (
-                <div key={`day-${d.day}`} className="p-3 sm:p-4">
-                  {/* ───────────────── Mobile (2 linhas, gaps compactos) ───────────────── */}
-                  <div className="sm:hidden space-y-2">
-                    {/* Linha 1: Dia + Fechado */}
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
+        <div className="mt-5 space-y-6">
+          {/* Editor de dias */}
+          <div className="divide-y rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+            {loading ? (
+              <div className="p-4 text-sm text-gray-600 dark:text-slate-400">Carregando…</div>
+            ) : (
+              localHours.map((d, i) => {
+                const err = errors[d.day] || emptyErr;
+                const hasGeneral = !!err.general;
+                const openErr = !!err.open;
+                const closeErr = !!err.close;
+
+                return (
+                  <div key={`day-${d.day}`} className="p-3 sm:p-4">
+                    {/* ───────────────── Mobile ───────────────── */}
+                    <div className="sm:hidden space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
+                        <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
+                          <input
+                            type="checkbox"
+                            checked={d.is_closed}
+                            onChange={(e) => setHourAt(i, { is_closed: e.target.checked })}
+                          />
+                          Fechado
+                        </label>
+                      </div>
+
+                      {!d.is_closed && (
+                        <div className="flex items-center gap-3">
+                          <div className="inline-flex items-center gap-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
+                            <div className="relative">
+                              <input
+                                type="time"
+                                value={d.open_time || ''}
+                                onChange={(e) => setOpen(i, e.target.value)}
+                                className={`time-input px-2 py-1 pr-9 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                            ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                                aria-invalid={openErr}
+                              />
+                              <Clock className="pointer-events-none w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-white/90" />
+                            </div>
+                          </div>
+                          <div className="inline-flex items-center gap-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
+                            <div className="relative">
+                              <input
+                                type="time"
+                                value={d.close_time || ''}
+                                onChange={(e) => setClose(i, e.target.value)}
+                                className={`time-input px-2 py-1 pr-9 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                            ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                                aria-invalid={closeErr}
+                              />
+                              <Clock className="pointer-events-none w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-white/90" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {(hasGeneral || openErr || closeErr) && (
+                        <div className="text-xs text-red-600 dark:text-red-400">
+                          {err.open ? `Abre: ${err.open}. ` : ''}
+                          {err.close ? `Fecha: ${err.close}. ` : ''}
+                          {err.general ? `${err.general}.` : ''}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ───────────────── Desktop ───────────────── */}
+                    <div className="hidden sm:flex sm:items-center sm:gap-3">
+                      <div className="w-16 shrink-0 font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
+
                       <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
                         <input
                           type="checkbox"
@@ -318,191 +385,147 @@ const HoursTab: React.FC<{
                         />
                         Fechado
                       </label>
+
+                      {!d.is_closed && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex items-center gap-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
+                            <div className="relative">
+                              <input
+                                type="time"
+                                value={d.open_time || ''}
+                                onChange={(e) => setOpen(i, e.target.value)}
+                                className={`time-input px-2 py-1 pr-9 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                            ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                                aria-invalid={openErr}
+                              />
+                              <Clock className="pointer-events-none w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-white/90" />
+                            </div>
+                          </div>
+                          <div className="inline-flex items-center gap-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
+                            <div className="relative">
+                              <input
+                                type="time"
+                                value={d.close_time || ''}
+                                onChange={(e) => setClose(i, e.target.value)}
+                                className={`time-input px-2 py-1 pr-9 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
+                                            ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
+                                aria-invalid={closeErr}
+                              />
+                              <Clock className="pointer-events-none w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-white/90" />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {(hasGeneral || openErr || closeErr) && (
+                        <div className="text-xs text-red-600 dark:text-red-400 sm:ml-2">
+                          {err.open ? `Abre: ${err.open}. ` : ''}
+                          {err.close ? `Fecha: ${err.close}. ` : ''}
+                          {err.general ? `${err.general}.` : ''}
+                        </div>
+                      )}
                     </div>
-
-                    {/* Linha 2: Abre / Fecha (se aberto) */}
-                    {!d.is_closed && (
-                      <div className="flex items-center gap-3">
-                        <div className="inline-flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
-                          <input
-                            type="time"
-                            value={d.open_time || ''}
-                            onChange={(e) => setOpen(i, e.target.value)}
-                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
-                                        ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                            aria-invalid={openErr}
-                          />
-                        </div>
-                        <div className="inline-flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
-                          <input
-                            type="time"
-                            value={d.close_time || ''}
-                            onChange={(e) => setClose(i, e.target.value)}
-                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
-                                        ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                            aria-invalid={closeErr}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {(hasGeneral || openErr || closeErr) && (
-                      <div className="text-xs text-red-600 dark:text-red-400">
-                        {err.open ? `Abre: ${err.open}. ` : ''}
-                        {err.close ? `Fecha: ${err.close}. ` : ''}
-                        {err.general ? `${err.general}.` : ''}
-                      </div>
-                    )}
                   </div>
+                );
+              })
+            )}
+          </div>
 
-                  {/* ───────────────── Desktop (linha única) ───────────────── */}
-                  <div className="hidden sm:flex sm:items-center sm:gap-3">
-                    <div className="w-16 shrink-0 font-medium text-gray-900 dark:text-slate-100">{DAY_LABELS[d.day]}</div>
-
-                    <label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={d.is_closed}
-                        onChange={(e) => setHourAt(i, { is_closed: e.target.checked })}
-                      />
-                      Fechado
-                    </label>
-
-                    {!d.is_closed && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-400">Abre</span>
-                          <input
-                            type="time"
-                            value={d.open_time || ''}
-                            onChange={(e) => setOpen(i, e.target.value)}
-                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
-                                        ${openErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                            aria-invalid={openErr}
-                          />
-                        </div>
-                        <div className="inline-flex items-center gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-400">Fecha</span>
-                          <input
-                            type="time"
-                            value={d.close_time || ''}
-                            onChange={(e) => setClose(i, e.target.value)}
-                            className={`px-2 py-1 rounded-xl border bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2
-                                        ${closeErr ? 'border-red-500 focus:ring-red-400' : 'border-gray-200 dark:border-slate-700'}`}
-                            aria-invalid={closeErr}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {(hasGeneral || openErr || closeErr) && (
-                      <div className="text-xs text-red-600 dark:text-red-400 sm:ml-2">
-                        {err.open ? `Abre: ${err.open}. ` : ''}
-                        {err.close ? `Fecha: ${err.close}. ` : ''}
-                        {err.general ? `${err.general}.` : ''}
-                      </div>
-                    )}
-                  </div>
+          {/* Slot & Buffer */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="p-4 bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700">
+              <div className="font-medium text-gray-900 dark:text-slate-100 mb-2">Slot do agendamento</div>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
+                Granularidade dos horários exibidos aos clientes.
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <select
+                    className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
+                               bg-white dark:bg-slate-900/70 px-3 pr-10 py-2
+                               text-gray-900 dark:text-slate-100"
+                    value={localSlot}
+                    onChange={(e) => setLocalSlot(parseInt(e.target.value, 10))}
+                  >
+                    {[10, 15, 20, 30, 45, 60].map(v => (
+                      <option key={`slot-${v}`} value={v}>{v} min</option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2
+                               text-gray-500 dark:text-slate-400"
+                  />
                 </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Slot & Buffer */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="p-4 bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700">
-            <div className="font-medium text-gray-900 dark:text-slate-100 mb-2">Slot do agendamento</div>
-            <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
-              Granularidade dos horários exibidos aos clientes.
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
-                             bg-white dark:bg-slate-900/70 px-3 pr-10 py-2
-                             text-gray-900 dark:text-slate-100"
-                  value={localSlot}
-                  onChange={(e) => setLocalSlot(parseInt(e.target.value, 10))}
-                >
-                  {[10, 15, 20, 30, 45, 60].map(v => (
-                    <option key={`slot-${v}`} value={v}>{v} min</option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2
-                             text-gray-500 dark:text-slate-400"
-                />
+                <span className="text-sm text-gray-500 dark:text-slate-400">padrão: 30 min</span>
               </div>
-              <span className="text-sm text-gray-500 dark:text-slate-400">padrão: 30 min</span>
-            </div>
-          </Card>
+            </Card>
 
-          <Card className="p-4 bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700">
-            <div className="font-medium text-gray-900 dark:text-slate-100 mb-2">Buffer entre atendimentos</div>
-            <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
-              Tempo extra entre serviços para transição (não aparece para o cliente).
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <select
-                  className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
-                             bg-white dark:bg-slate-900/70 px-3 pr-10 py-2
-                             text-gray-900 dark:text-slate-100"
-                  value={localBuffer}
-                  onChange={(e) => setLocalBuffer(parseInt(e.target.value, 10))}
-                >
-                  {[0, 5, 10, 15, 20, 30].map(v => (
-                    <option key={`buffer-${v}`} value={v}>{v} min</option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="pointer-events-none w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2
-                             text-gray-500 dark:text-slate-400"
-                />
+            <Card className="p-4 bg-white dark:bg-slate-900/50 border border-gray-200 dark:border-slate-700">
+              <div className="font-medium text-gray-900 dark:text-slate-100 mb-2">Buffer entre atendimentos</div>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
+                Tempo extra entre serviços para transição (não aparece para o cliente).
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <select
+                    className="appearance-none rounded-xl border border-gray-200 dark:border-slate-700
+                               bg-white dark:bg-slate-900/70 px-3 pr-10 py-2
+                               text-gray-900 dark:text-slate-100"
+                    value={localBuffer}
+                    onChange={(e) => setLocalBuffer(parseInt(e.target.value, 10))}
+                  >
+                    {[0, 5, 10, 15, 20, 30].map(v => (
+                      <option key={`buffer-${v}`} value={v}>{v} min</option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2
+                               text-gray-500 dark:text-slate-400"
+                  />
+                </div>
+                <span className="text-sm text-gray-500 dark:text-slate-400">padrão: 0 min</span>
               </div>
-              <span className="text-sm text-gray-500 dark:text-slate-400">padrão: 0 min</span>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* Botão de salvar (desktop inline) */}
-      <div className="hidden sm:flex items-center justify-end mt-6">
-        <button
-          onClick={handleSave}
-          disabled={!storeId || !dirty || hasErrors || saving}
-          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium
-                     focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60
-                     disabled:opacity-50 disabled:cursor-default"
-        >
-          {saving ? 'Salvando…' : 'Salvar horários'}
-        </button>
-      </div>
-
-      {/* Botão flutuante (mobile / PWA) – offset maior e gaps compactos no resto da UI */}
-      {dirty && (
-        <div className="sm:hidden">
-          <div
-            className="fixed inset-x-0 px-4 z-40 pointer-events-none"
-            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
-          >
-            <div className="pointer-events-auto max-w-md mx-auto">
-              <button
-                onClick={handleSave}
-                disabled={!storeId || hasErrors || saving}
-                className="w-full shadow-lg rounded-full px-5 py-3 bg-indigo-600 text-white font-semibold
-                           hover:bg-indigo-700 active:scale-[0.99] transition disabled:opacity-50"
-              >
-                {saving ? 'Salvando…' : 'Salvar horários'}
-              </button>
-            </div>
+            </Card>
           </div>
         </div>
-      )}
-    </Card>
+
+        {/* Botão de salvar (desktop inline) */}
+        <div className="hidden sm:flex items-center justify-end mt-6">
+          <button
+            onClick={handleSave}
+            disabled={!storeId || !dirty || hasErrors || saving}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60
+                       disabled:opacity-50 disabled:cursor-default"
+          >
+            {saving ? 'Salvando…' : 'Salvar horários'}
+          </button>
+        </div>
+
+        {/* Botão flutuante (mobile / PWA) */}
+        {dirty && (
+          <div className="sm:hidden">
+            <div
+              className="fixed inset-x-0 px-4 z-40 pointer-events-none"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 120px)' }}
+            >
+              <div className="pointer-events-auto max-w-md mx-auto">
+                <button
+                  onClick={handleSave}
+                  disabled={!storeId || hasErrors || saving}
+                  className="w-full shadow-lg rounded-full px-5 py-3 bg-indigo-600 text-white font-semibold
+                             hover:bg-indigo-700 active:scale-[0.99] transition disabled:opacity-50"
+                >
+                  {saving ? 'Salvando…' : 'Salvar horários'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+    </>
   );
 };
 

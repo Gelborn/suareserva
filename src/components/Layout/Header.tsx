@@ -96,12 +96,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
           )}
 
           <div className="flex items-center">
-            <div className="flex flex-col leading-none">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                SuaReserva <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">| digital</span>
-              </h1>
-              
-            </div>
+            <img
+              src={theme === 'dark' ? '/logo-white.png' : '/logo.png'}
+              alt="SuaReserva"
+              className="h-20 w-auto"
+            />
           </div>
         </div>
 

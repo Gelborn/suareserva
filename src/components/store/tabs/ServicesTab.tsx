@@ -285,11 +285,26 @@ export default function ServicesTab({ storeId, businessId, onAfterMutate }: Prop
                       {asMoney(s.price_cents)} · {s.duration_min} min
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-80">
-                    <button onClick={() => openEdit(s)} className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800" title="Editar">
+                  <div className="flex items-center gap-1">
+                    {/* EDITAR — ícone visível no dark */}
+                    <button
+                      aria-label="Editar"
+                      onClick={() => openEdit(s)}
+                      className="p-2 rounded-lg border border-gray-200 dark:border-slate-700
+                                 text-gray-700 dark:text-slate-100
+                                 hover:bg-gray-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      title="Editar"
+                    >
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button onClick={() => askRemove(s)} className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-red-50/70 dark:hover:bg-rose-900/20 text-rose-600 dark:text-rose-300" title="Remover">
+                    {/* REMOVER */}
+                    <button
+                      aria-label="Remover"
+                      onClick={() => askRemove(s)}
+                      className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-red-50/70 dark:hover:bg-rose-900/20
+                                 text-rose-600 dark:text-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500/40"
+                      title="Remover"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -305,7 +320,7 @@ export default function ServicesTab({ storeId, businessId, onAfterMutate }: Prop
         )}
       </div>
 
-      {/* Modal Criar/Editar — com “chevron/fechar” com mais respiro */}
+      {/* Modal Criar/Editar */}
       {modal.open && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={closeModal} />
@@ -316,7 +331,7 @@ export default function ServicesTab({ storeId, businessId, onAfterMutate }: Prop
                 <div className="w-12 h-1.5 rounded-full bg-gray-300/80 dark:bg-slate-600" />
               </div>
 
-              {/* botão fechar com área maior e mais espaço */}
+              {/* botão fechar */}
               <button
                 onClick={closeModal}
                 className="absolute top-3 right-3 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
@@ -392,7 +407,7 @@ export default function ServicesTab({ storeId, businessId, onAfterMutate }: Prop
         </div>
       )}
 
-      {/* Modal de confirmação de deleção — bonito e perigoso 😈 */}
+      {/* Modal de confirmação de deleção */}
       {confirmDel.open && (
         <div className="fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" onClick={closeRemove} />

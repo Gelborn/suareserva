@@ -246,8 +246,14 @@ const SummaryCard: React.FC<{
   priceLabel?: string;
   durationLabel?: string;
   accent: string;
-}> = ({ storeName, service, provider, slotLabel, slotDate, priceLabel, durationLabel, accent }) => (
-  <aside className="rounded-3xl border border-gray-200 bg-white/80 p-6 shadow-sm backdrop-blur">
+  className?: string;
+}> = ({ storeName, service, provider, slotLabel, slotDate, priceLabel, durationLabel, accent, className }) => (
+  <aside
+    className={clsx(
+      'rounded-3xl border border-gray-200 bg-white/80 p-6 shadow-sm backdrop-blur',
+      className
+    )}
+  >
     <p className="text-xs uppercase tracking-wide text-gray-500">Resumo</p>
     <h3 className="mt-1 text-lg font-semibold text-gray-900">{storeName}</h3>
     <div className="mt-6 space-y-4 text-sm text-gray-700">
@@ -415,6 +421,14 @@ const PublicStorePage: React.FC = () => {
     customerName.trim().length >= 2 &&
     phoneValid &&
     !creating;
+  const readyForSummary =
+    step === 4 &&
+    !!store &&
+    !!selectedService &&
+    !!selectedProvider &&
+    !!selectedSlot &&
+    customerName.trim().length >= 2 &&
+    phoneValid;
 
   const resetForm = () => {
     setCustomerName('');
@@ -504,7 +518,7 @@ const PublicStorePage: React.FC = () => {
                 alt={store.name ?? 'Foto de capa'}
                 className="h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-br from-black/80 via-black/65 to-black/50" />
+              <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/55 to-black/40" />
             </>
           ) : (
             <div
@@ -513,7 +527,7 @@ const PublicStorePage: React.FC = () => {
             />
           )}
         </div>
-        <div className="relative z-10 mx-auto flex min-h-[360px] max-w-5xl flex-col justify-end px-6 pb-20 pt-24">
+        <div className="relative z-10 mx-auto flex min-h-[280px] lg:min-h-[320px] max-w-5xl flex-col justify-end px-6 pb-16 pt-16">
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div className="flex flex-col gap-4 md:flex-row md:items-center">
               {store.logo_url ? (
@@ -836,21 +850,21 @@ const PublicStorePage: React.FC = () => {
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(maskPhone(e.target.value))}
                         placeholder="(11) 91234-5678"
-                    className={clsx(
-                      'mt-2 w-full rounded-2xl border px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2',
-                      phoneValid
-                        ? 'border-gray-200 focus:ring-gray-900/10'
-                        : 'border-amber-300 focus:border-amber-400 focus:ring-amber-200'
-                    )}
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Vamos usar esse número para enviar confirmações e lembretes pelo WhatsApp/SMS.
-                  </p>
-                </div>
+                        className={clsx(
+                          'mt-2 w-full rounded-2xl border px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2',
+                          phoneValid
+                            ? 'border-gray-200 focus:ring-gray-900/10'
+                            : 'border-amber-300 focus:border-amber-400 focus:ring-amber-200'
+                        )}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Vamos usar esse número para enviar confirmações e lembretes pelo WhatsApp/SMS.
+                      </p>
+                    </div>
 
-                <div>
-                  <label className="text-sm font-semibold text-gray-700" htmlFor="customerEmail">
-                    E-mail (opcional)
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700" htmlFor="customerEmail">
+                        E-mail (opcional)
                       </label>
                       <input
                         id="customerEmail"
@@ -877,7 +891,7 @@ const PublicStorePage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
                       type="button"
                       onClick={prevStep}
@@ -886,28 +900,47 @@ const PublicStorePage: React.FC = () => {
                       <ArrowLeft className="h-4 w-4" />
                       Voltar
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleCreateBooking}
-                      disabled={!canSubmit}
-                      className={clsx(
-                        'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                        canSubmit
-                          ? undefined
-                          : 'cursor-not-allowed opacity-60'
-                      )}
-                      style={
-                        canSubmit
-                          ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
-                          : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
-                      }
-                    >
-                      {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      {STEP_CONTENT[step].cta}
-                    </button>
+                    {!readyForSummary && (
+                      <span className="text-xs text-gray-500 sm:text-sm">
+                        Informe nome e telefone para liberar a confirmação.
+                      </span>
+                    )}
                   </div>
+
+                  {readyForSummary && (
+                    <div className="space-y-4 lg:hidden">
+                      <SummaryCard
+                        storeName={store.name}
+                        service={selectedService}
+                        provider={selectedProvider}
+                        slotLabel={slotLabel}
+                        slotDate={dayLabel}
+                        priceLabel={formatPrice(selectedService?.price_cents)}
+                        durationLabel={formatDuration(selectedService?.duration_min)}
+                        accent={accent}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateBooking}
+                        disabled={!canSubmit}
+                        className={clsx(
+                          'w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+                          canSubmit ? '' : 'cursor-not-allowed opacity-60'
+                        )}
+                        style={
+                          canSubmit
+                            ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                            : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                        }
+                      >
+                        {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        {STEP_CONTENT[step].cta}
+                      </button>
+                    </div>
+                  )}
+
                   {createdBookingId && (
-                    <div className="text-sm font-semibold text-emerald-600">
+                    <div className="text-sm font-semibold text-emerald-600 lg:hidden">
                       Pedido enviado! Em breve a loja entrará em contato para confirmar os detalhes.
                     </div>
                   )}
@@ -916,16 +949,42 @@ const PublicStorePage: React.FC = () => {
             </div>
           </section>
 
-          <SummaryCard
-            storeName={store.name}
-            service={selectedService}
-            provider={selectedProvider}
-            slotLabel={slotLabel}
-            slotDate={dayLabel}
-            priceLabel={formatPrice(selectedService?.price_cents)}
-            durationLabel={formatDuration(selectedService?.duration_min)}
-            accent={accent}
-          />
+          {readyForSummary && (
+            <div className="hidden lg:flex lg:flex-col lg:gap-4">
+              <SummaryCard
+                storeName={store.name}
+                service={selectedService}
+                provider={selectedProvider}
+                slotLabel={slotLabel}
+                slotDate={dayLabel}
+                priceLabel={formatPrice(selectedService?.price_cents)}
+                durationLabel={formatDuration(selectedService?.duration_min)}
+                accent={accent}
+              />
+              <button
+                type="button"
+                onClick={handleCreateBooking}
+                disabled={!canSubmit}
+                className={clsx(
+                  'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+                  canSubmit ? '' : 'cursor-not-allowed opacity-60'
+                )}
+                style={
+                  canSubmit
+                    ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                    : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                }
+              >
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {STEP_CONTENT[step].cta}
+              </button>
+              {createdBookingId && (
+                <div className="text-sm font-semibold text-emerald-600">
+                  Pedido enviado! Em breve a loja entrará em contato para confirmar os detalhes.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>
