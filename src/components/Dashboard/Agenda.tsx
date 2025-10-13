@@ -451,7 +451,7 @@ const Agenda: React.FC = () => {
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 mb-1">
                 <Sparkles className="h-4 w-4" />
-                <span className="text-xs uppercase tracking-wide font-semibold">SuaReserva · Agenda</span>
+                <span className="text-xs uppercase tracking-wide font-semibold">Sua Agenda</span>
               </div>
               <h1 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900 dark:text-white truncate">
                 {periodTitle}
