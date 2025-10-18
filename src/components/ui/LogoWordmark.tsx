@@ -1,26 +1,31 @@
+// src/components/LogoWordmark.tsx
 import React from "react";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type Props = {
-  className?: string;
-  showOnlineTag?: boolean;
+  className?: string;      // wrapper
+  imgClassName?: string;   // controla o tamanho do <img> via Tailwind
+  alt?: string;
 };
 
-const LogoWordmark: React.FC<Props> = ({ className = "", showOnlineTag = true }) => {
+const LogoWordmark: React.FC<Props> = ({
+  className = "",
+  // h-20 = igual ao Header; mude para h-28/h-32 para "aumentar bastante"
+  imgClassName = "h-20 w-auto",
+  alt = "SuaReserva",
+}) => {
+  const { theme } = useTheme();
+  const src = theme === "dark" ? "/logo-white.png" : "/logo.png";
+
   return (
     <div className={`flex items-center ${className}`}>
-      <div className="flex flex-col leading-none">
-        <h1
-          className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent tracking-tight"
-          aria-label="SuaReserva digital"
-        >
-          SuaReserva{" "}
-          {showOnlineTag && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium align-middle">
-              | digital
-            </span>
-          )}
-        </h1>
-      </div>
+      <img
+        src={src}
+        alt={alt}
+        className={`block select-none shrink-0 ${imgClassName}`}
+        draggable={false}
+        decoding="async"
+      />
     </div>
   );
 };

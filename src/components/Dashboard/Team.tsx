@@ -460,7 +460,7 @@ const Team: React.FC = () => {
       >
         <span className="inline-flex items-center gap-2">
           <Plus className="w-5 h-5" />
-          Novo
+          Novo membro
         </span>
       </button>
 
