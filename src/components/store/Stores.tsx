@@ -1,7 +1,7 @@
 // src/pages/stores/Stores.tsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Phone, ChevronRight } from 'lucide-react';
+import { Building2, Phone, ChevronRight, Plus } from 'lucide-react';
 
 import { useBusiness } from '../../hooks/useBusiness';
 import { useStores } from '../../hooks/useStores';
@@ -70,6 +70,26 @@ const StoreSkeleton: React.FC = () => (
   </div>
 );
 
+/* ---------------- PWA / Standalone detection (mesma lógica) ---------------- */
+function useIsStandalone() {
+  const [standalone, setStandalone] = React.useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+      const isIOSStandalone = (navigator as any).standalone === true;
+      setStandalone(Boolean(isStandalone || isIOSStandalone));
+    };
+    check();
+
+    const mq = window.matchMedia?.('(display-mode: standalone)');
+    mq?.addEventListener?.('change', check);
+    return () => mq?.removeEventListener?.('change', check);
+  }, []);
+
+  return standalone;
+}
+
 /* ---------------- Page ---------------- */
 
 const Stores: React.FC = () => {
@@ -109,6 +129,18 @@ const Stores: React.FC = () => {
       : { text: 'Falta dados', tone: 'warn' };
   };
 
+  /* ---- FAB bottom ciente de PWA + safe-area ---- */
+  const isPwa = useIsStandalone();
+  const fabBottom = React.useMemo(() => {
+    // base = 80px (equivalente ao bottom-20)
+    // +24px para subir um pouco no PWA
+    // + env(safe-area-inset-bottom) para iOS
+    const base = 80;
+    return isPwa
+      ? `calc(${base + 24}px + env(safe-area-inset-bottom, 0px))`
+      : `${base}px`;
+  }, [isPwa]);
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
       {/* Header */}
@@ -121,9 +153,10 @@ const Stores: React.FC = () => {
         {!empty && !loading && (
           <button
             onClick={onOpenModal}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shrink-0 whitespace-nowrap"
+            className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shrink-0 whitespace-nowrap"
           >
-            + Nova loja
+            <Plus className="w-4 h-4" />
+            Nova loja
           </button>
         )}
       </div>
@@ -149,6 +182,7 @@ const Stores: React.FC = () => {
               onClick={onOpenModal}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold whitespace-nowrap"
             >
+              <Plus className="w-5 h-5" />
               Criar minha loja
             </button>
           </div>
@@ -196,7 +230,7 @@ const Stores: React.FC = () => {
                       >
                         {s.name}
                       </div>
-                      <StatusBadge text={status.text} tone={status.tone} />
+                        <StatusBadge text={status.text} tone={status.tone} />
                     </div>
 
                     {/* Endereço (quebra em até 2 linhas) */}
@@ -227,6 +261,22 @@ const Stores: React.FC = () => {
             );
           })}
         </div>
+      )}
+
+      {/* FAB 'Nova loja' — mobile, subido no PWA com safe-area */}
+      {!loading && (
+        <button
+          onClick={onOpenModal}
+          style={{ bottom: fabBottom }}
+          className="sm:hidden fixed right-4 z-40 rounded-2xl shadow-lg
+                     px-4 py-3 bg-indigo-600 text-white active:scale-[0.98]"
+          title="Nova loja"
+        >
+          <span className="inline-flex items-center gap-2">
+            <Plus className="w-5 h-5" />
+            Nova loja
+          </span>
+        </button>
       )}
 
       {/* Modal de criação */}
