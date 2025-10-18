@@ -41,6 +41,26 @@ const Avatar: React.FC<{ name?: string | null; src?: string | null; size?: numbe
 
 type MemberWithStore = TeamMemberRow & { store_name?: string | null; service_count?: number };
 
+/* -------------------- PWA / Standalone detection -------------------- */
+function useIsStandalone() {
+  const [standalone, setStandalone] = React.useState(false);
+
+  React.useEffect(() => {
+    const check = () => {
+      const isStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+      const isIOSStandalone = (navigator as any).standalone === true;
+      setStandalone(Boolean(isStandalone || isIOSStandalone));
+    };
+    check();
+
+    const mq = window.matchMedia?.('(display-mode: standalone)');
+    mq?.addEventListener?.('change', check);
+    return () => mq?.removeEventListener?.('change', check);
+  }, []);
+
+  return standalone;
+}
+
 /* -------------------- Pull to refresh (mobile) -------------------- */
 function usePTR(ref: React.RefObject<HTMLDivElement>, onRefresh: () => Promise<any> | void) {
   const pulling = React.useRef(false);
@@ -186,6 +206,18 @@ const Team: React.FC = () => {
   /* ---- PTR hook attached to the scrollable list ---- */
   const listRef = React.useRef<HTMLDivElement>(null);
   const { offset, refreshing } = usePTR(listRef, async () => { await refresh(); });
+
+  /* ---- PWA-aware FAB bottom ---- */
+  const isPwa = useIsStandalone();
+  const fabBottom = React.useMemo(() => {
+    // base = 80px (equivale a bottom-20)
+    // +24px para subir um pouco no PWA
+    // + env(safe-area-inset-bottom) para iOS
+    const base = 80;
+    return isPwa
+      ? `calc(${base + 24}px + env(safe-area-inset-bottom, 0px))`
+      : `${base}px`;
+  }, [isPwa]);
 
   /* -------------------- Empty states -------------------- */
   if (!loading && members.length === 0) {
@@ -421,7 +453,8 @@ const Team: React.FC = () => {
       <button
         onClick={openCreate}
         disabled={hasActiveStore === false}
-        className="sm:hidden fixed right-4 bottom-20 md:bottom-8 z-40 rounded-2xl shadow-lg
+        style={{ bottom: fabBottom }}
+        className="sm:hidden fixed right-4 z-40 rounded-2xl shadow-lg
                    px-4 py-3 bg-indigo-600 text-white active:scale-[0.98]"
         title={hasActiveStore === false ? 'É necessário ter uma loja ativa' : 'Novo membro'}
       >
