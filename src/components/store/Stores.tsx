@@ -1,7 +1,7 @@
 // src/pages/stores/Stores.tsx
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Phone, ChevronRight, Plus } from 'lucide-react';
+import { Building2, Phone, ChevronRight, Plus, Search, Loader2 } from 'lucide-react';
 
 import { useBusiness } from '../../hooks/useBusiness';
 import { useStores } from '../../hooks/useStores';
@@ -15,7 +15,12 @@ const Card: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ class
   </div>
 );
 
-const StoreAvatar: React.FC<{ name?: string | null; logoUrl?: string | null }> = ({ name, logoUrl }) => {
+const StoreAvatar: React.FC<{
+  name?: string | null;
+  logoUrl?: string | null;
+  size?: number;
+  className?: string;
+}> = ({ name, logoUrl, size = 48, className = '' }) => {
   const initials = (name || 'SR')
     .trim()
     .split(/\s+/)
@@ -23,17 +28,23 @@ const StoreAvatar: React.FC<{ name?: string | null; logoUrl?: string | null }> =
     .map((p) => p[0]?.toUpperCase() ?? '')
     .join('') || 'SR';
 
+  const style = { width: size, height: size };
+
   if (logoUrl) {
     return (
       <img
         src={logoUrl}
         alt={name ?? 'Logo da loja'}
-        className="w-11 h-11 rounded-xl object-cover ring-1 ring-black/5 dark:ring-white/5"
+        style={style}
+        className={`rounded-xl object-cover ring-1 ring-black/5 dark:ring-white/5 ${className}`}
       />
     );
   }
   return (
-    <div className="w-11 h-11 rounded-xl grid place-items-center text-white font-semibold bg-gradient-to-br from-indigo-500 to-violet-500 ring-1 ring-black/5 dark:ring-white/5">
+    <div
+      style={style}
+      className={`rounded-xl grid place-items-center text-white font-semibold bg-gradient-to-br from-indigo-500 to-violet-500 ring-1 ring-black/5 dark:ring-white/5 ${className}`}
+    >
       {initials}
     </div>
   );
@@ -48,7 +59,7 @@ const StatusBadge: React.FC<{ text: string; tone: BadgeTone }> = ({ text, tone }
       : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-200/70 dark:border-amber-800';
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs border ${toneClass}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs border ${toneClass}`}>
       {text}
     </span>
   );
@@ -56,21 +67,19 @@ const StatusBadge: React.FC<{ text: string; tone: BadgeTone }> = ({ text, tone }
 
 // Skeleton
 const StoreSkeleton: React.FC = () => (
-  <div className="p-5 min-h-[12rem] flex flex-col justify-between rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white dark:bg-gray-800 shadow-sm">
-    <div className="flex items-start gap-3">
-      <div className="w-11 h-11 rounded-xl bg-gray-200 dark:bg-gray-700" />
-      <div className="min-w-0 flex-1">
-        <div className="h-5 w-40 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
-        <div className="h-4 w-56 rounded bg-gray-200 dark:bg-gray-700 mb-1" />
-        <div className="h-4 w-36 rounded bg-gray-200 dark:bg-gray-700" />
-      </div>
-      <div className="w-5 h-5 rounded bg-gray-200 dark:bg-gray-700" />
+  <div className="p-3 sm:p-4 flex items-start gap-3 sm:gap-4 rounded-2xl border border-gray-200/70 dark:border-gray-700/70 bg-white dark:bg-gray-800 shadow-sm">
+    <div className="w-12 h-12 rounded-xl bg-gray-200 dark:bg-gray-700" />
+    <div className="min-w-0 flex-1">
+      <div className="h-4 w-40 rounded bg-gray-200 dark:bg-gray-700 mb-2" />
+      <div className="h-3 w-64 rounded bg-gray-200 dark:bg-gray-700 mb-1" />
+      <div className="h-3 w-40 rounded bg-gray-200 dark:bg-gray-700" />
     </div>
-    <div className="h-9 w-full sm:w-28 self-end rounded-xl bg-gray-200 dark:bg-gray-700" />
+    <div className="w-24 h-9 rounded-xl bg-gray-200 dark:bg-gray-700 hidden sm:block" />
+    <div className="w-9 h-9 rounded-xl bg-gray-200 dark:bg-gray-700 sm:hidden" />
   </div>
 );
 
-/* ---------------- PWA / Standalone detection (mesma lógica) ---------------- */
+/* ---------------- PWA / Standalone detection ---------------- */
 function useIsStandalone() {
   const [standalone, setStandalone] = React.useState(false);
 
@@ -90,6 +99,69 @@ function useIsStandalone() {
   return standalone;
 }
 
+/* ---------------- Pull to refresh (mobile) ---------------- */
+function usePTR(ref: React.RefObject<HTMLDivElement>, onRefresh: () => Promise<any> | void) {
+  const pulling = React.useRef(false);
+  const startY = React.useRef(0);
+  const [offset, setOffset] = React.useState(0);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const MAX = 96;           // px
+    const THRESHOLD = 64;     // px
+    const EASING = (x: number) => 1 - Math.pow(1 - x, 2);
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (refreshing) return;
+      if (el.scrollTop > 0) return;
+      pulling.current = true;
+      startY.current = e.touches[0].clientY;
+      setOffset(0);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pulling.current || refreshing) return;
+      const dy = e.touches[0].clientY - startY.current;
+      if (dy <= 0) return;
+      e.preventDefault();
+      const eased = EASING(Math.min(dy, MAX) / MAX) * MAX;
+      setOffset(eased);
+    };
+
+    const end = async () => {
+      if (!pulling.current) return;
+      const should = offset >= THRESHOLD;
+      pulling.current = false;
+      if (should) {
+        setRefreshing(true);
+        setOffset(THRESHOLD);
+        try { await onRefresh(); }
+        finally {
+          setTimeout(() => { setOffset(0); setRefreshing(false); }, 300);
+        }
+      } else {
+        setOffset(0);
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove as any);
+      el.removeEventListener('touchend', end);
+      el.removeEventListener('touchcancel', end);
+    };
+  }, [ref, onRefresh, offset, refreshing]);
+
+  return { offset, refreshing };
+}
+
 /* ---------------- Page ---------------- */
 
 const Stores: React.FC = () => {
@@ -104,7 +176,9 @@ const Stores: React.FC = () => {
     isActive,
   } = useStores(business?.id);
 
+  const [query, setQuery] = useState('');
   const [openModal, setOpenModal] = useState(false);
+
   const empty = useMemo(() => !loading && stores.length === 0, [loading, stores]);
 
   const onOpenModal = () => setOpenModal(true);
@@ -117,6 +191,14 @@ const Stores: React.FC = () => {
 
   const addressOneLine = (s: any): string | null =>
     s?.address_one_line || [s?.street, s?.number].filter(Boolean).join(', ') || null;
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase();
+    return (stores || []).filter((s: any) => {
+      const addr = (addressOneLine(s) || '').toLowerCase();
+      return (s?.name || '').toLowerCase().includes(q) || addr.includes(q);
+    });
+  }, [stores, query]);
 
   const statusInfo = (s: any): { text: string; tone: BadgeTone } => {
     const st = getStatus(s.id);
@@ -132,40 +214,75 @@ const Stores: React.FC = () => {
   /* ---- FAB bottom ciente de PWA + safe-area ---- */
   const isPwa = useIsStandalone();
   const fabBottom = React.useMemo(() => {
-    // base = 80px (equivalente ao bottom-20)
-    // +24px para subir um pouco no PWA
-    // + env(safe-area-inset-bottom) para iOS
-    const base = 80;
+    const base = 80; // ~ bottom-20
     return isPwa
       ? `calc(${base + 24}px + env(safe-area-inset-bottom, 0px))`
       : `${base}px`;
   }, [isPwa]);
 
+  /* ---- PTR ---- */
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const { offset, refreshing } = usePTR(listRef, async () => {
+    navigate(0);
+  });
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 text-gray-900 dark:text-gray-100">
-      {/* Header */}
+      {/* Header + busca */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">Lojas</h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">Gerencie suas unidades/endereços.</p>
         </div>
 
-        {!empty && !loading && (
-          <button
-            onClick={onOpenModal}
-            className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shrink-0 whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            Nova loja
-          </button>
-        )}
+        <div className="flex items-stretch gap-2">
+          <div className="relative flex-1 sm:w-80">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-300" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por loja ou endereço…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700
+                         bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100
+                         placeholder-gray-400 dark:placeholder-slate-400"
+            />
+          </div>
+
+          {!empty && !loading && (
+            <button
+              onClick={onOpenModal}
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-medium shrink-0 whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              Nova loja
+            </button>
+          )}
+        </div>
       </div>
 
+      {/* Scroll + PTR */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <StoreSkeleton key={i} />
-          ))}
+        <div
+          className="relative overflow-auto"
+          style={{ maxHeight: 'calc(100vh - 220px)' }}
+          ref={listRef}
+        >
+          <div
+            className="flex items-center justify-center text-xs text-gray-500 dark:text-slate-400 transition-all"
+            style={{ height: `${offset}px` }}
+          >
+            {refreshing ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Atualizando…
+              </span>
+            ) : offset > 0 ? 'Solte para atualizar' : null}
+          </div>
+
+          <div className="flex flex-col gap-2 sm:gap-3 px-1 sm:px-0 pb-3 sm:pb-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <StoreSkeleton key={i} />
+            ))}
+          </div>
         </div>
       ) : empty ? (
         <Card className="p-10 text-center">
@@ -188,82 +305,125 @@ const Stores: React.FC = () => {
           </div>
         </Card>
       ) : (
-        // Cards clicáveis com chevron no rodapé (sempre visível)
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          {stores.map((s: any) => {
-            const addr = addressOneLine(s);
-            const status = statusInfo(s);
+        <div
+          className="relative overflow-auto"
+          style={{ maxHeight: 'calc(100vh - 220px)' }}
+          ref={listRef}
+        >
+          <div
+            className="flex items-center justify-center text-xs text-gray-500 dark:text-slate-400 transition-all"
+            style={{ height: `${offset}px` }}
+          >
+            {refreshing ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Atualizando…
+              </span>
+            ) : offset > 0 ? 'Solte para atualizar' : null}
+          </div>
 
-            const go = () => navigate(`/stores/${s.id}`);
-            const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                go();
-              }
-            };
+          {/* LISTA estilo Time, com QUEBRA de linhas */}
+          <div className="flex flex-col gap-2 sm:gap-3 px-1 sm:px-0 pb-3 sm:pb-4">
+            {filtered.map((s: any) => {
+              const addr = addressOneLine(s);
+              const status = statusInfo(s);
 
-            return (
-              <div
-                key={s.id}
-                role="button"
-                tabIndex={0}
-                onClick={go}
-                onKeyDown={onKey}
-                aria-label={`Abrir loja ${s.name}`}
-                className="group p-5 min-h-[12rem] flex flex-col justify-between
-                           rounded-2xl border border-gray-200/70 dark:border-gray-700/70
-                           bg-white dark:bg-gray-800 shadow-sm hover:shadow-md transition
-                           hover:bg-gray-50 dark:hover:bg-gray-800/80 cursor-pointer
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
-              >
-                {/* Linha principal: avatar + conteúdo */}
-                <div className="flex items-start gap-3 min-w-0">
-                  <StoreAvatar name={s.name} logoUrl={s.logo_url || null} />
+              const go = () => navigate(`/stores/${s.id}`);
+              const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  go();
+                }
+              };
+
+              return (
+                <div
+                  key={s.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={go}
+                  onKeyDown={onKey}
+                  aria-label={`Abrir loja ${s.name}`}
+                  className="p-3 sm:p-4 flex items-start gap-3 sm:gap-4
+                             rounded-2xl border border-gray-200/70 dark:border-slate-800/60
+                             bg-white dark:bg-slate-900/60
+                             shadow-sm hover:shadow transition
+                             hover:bg-gray-50 dark:hover:bg-slate-800/70"
+                >
+                  {/* Avatar */}
+                  <StoreAvatar name={s.name} logoUrl={s.logo_url || null} size={48} className="sm:!w-14 sm:!h-14" />
 
                   {/* Conteúdo */}
                   <div className="min-w-0 flex-1">
-                    {/* Nome + status */}
-                    <div className="flex items-start gap-2 flex-wrap">
+                    {/* Nome + status (SEM truncate) */}
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3">
                       <div
-                        className="text-[15px] sm:text-lg font-semibold leading-snug break-words line-clamp-2 text-gray-900 dark:text-white"
+                        className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-100 whitespace-normal break-words"
                         title={s.name}
                       >
                         {s.name}
                       </div>
-                        <StatusBadge text={status.text} tone={status.tone} />
+                      <StatusBadge text={status.text} tone={status.tone} />
                     </div>
 
-                    {/* Endereço (quebra em até 2 linhas) */}
-                    <div className="mt-0.5 text-[13px] sm:text-[14px] leading-snug text-gray-600 dark:text-gray-400 break-words line-clamp-2">
-                      {addr || <span className="text-gray-400 dark:text-gray-500">Endereço não configurado</span>}
-                    </div>
+                    {/* Meta info: endereço e WhatsApp (SEM truncar) */}
+                    <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-300 flex flex-wrap items-start gap-2 sm:gap-3">
+                      <span className="inline-flex items-start gap-1.5">
+                        <Building2 className="w-4 h-4 opacity-80 mt-[2px]" />
+                        <span className="whitespace-normal break-words max-w-full">
+                          {addr || <span className="text-gray-400 dark:text-gray-500">Endereço não configurado</span>}
+                        </span>
+                      </span>
 
-                    {/* WhatsApp */}
-                    <div className="mt-1 text-[13px] sm:text-[14px] leading-snug text-gray-600 dark:text-gray-400 flex items-center gap-1">
-                      <Phone className="w-4 h-4 shrink-0 opacity-70" />
-                      {s.whatsapp ? (
-                        <span className="break-all">{s.whatsapp}</span>
-                      ) : (
-                        <span className="text-gray-400 dark:text-gray-500">Sem número cadastrado</span>
-                      )}
+                      <span className="inline-flex items-start gap-1.5">
+                        <Phone className="w-4 h-4 opacity-80 mt-[2px]" />
+                        {s.whatsapp ? (
+                          <span className="break-all">{s.whatsapp}</span>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500">Sem número cadastrado</span>
+                        )}
+                      </span>
                     </div>
                   </div>
-                </div>
 
-                {/* Rodapé: chevron sempre visível à direita */}
-                <div className="flex items-center justify-end">
-                  <ChevronRight
-                    className="w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition"
-                    aria-hidden="true"
-                  />
+                  {/* Ações */}
+                  <div className="shrink-0">
+                    {/* Mobile: ícone */}
+                    <span
+                      className="sm:hidden inline-grid place-items-center size-9 rounded-xl
+                                 border border-gray-200 dark:border-slate-700
+                                 bg-white dark:bg-slate-900/70
+                                 text-gray-800 dark:text-slate-100"
+                      aria-hidden="true"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </span>
+
+                    {/* Desktop: botão com label */}
+                    <span
+                      className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-xl
+                                 border border-gray-200 dark:border-slate-700
+                                 bg-white dark:bg-slate-900/70
+                                 text-gray-800 dark:text-slate-100"
+                      aria-hidden="true"
+                    >
+                      Abrir
+                      <ChevronRight className="w-4 h-4" />
+                    </span>
+                  </div>
                 </div>
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div className="p-5 sm:p-6 text-center text-gray-500 dark:text-slate-400">
+                {query ? 'Nenhuma loja corresponde à busca.' : 'Nenhuma loja encontrada.'}
               </div>
-            );
-          })}
+            )}
+          </div>
         </div>
       )}
 
-      {/* FAB 'Nova loja' — mobile, subido no PWA com safe-area */}
+      {/* FAB 'Nova loja' — mobile, PWA + safe-area */}
       {!loading && (
         <button
           onClick={onOpenModal}
@@ -279,7 +439,7 @@ const Stores: React.FC = () => {
         </button>
       )}
 
-      {/* Modal de criação */}
+      {/* Modal */}
       <CreateStoreModal
         open={openModal}
         onClose={onCloseModal}
