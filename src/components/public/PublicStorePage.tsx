@@ -26,7 +26,7 @@ type Step = 1 | 2 | 3 | 4;
 const STEP_CONTENT: Record<Step, { headline: string; description: string; cta: string }> = {
   1: {
     headline: 'Gostaria de reservar um serviço?',
-    description: 'Escolha uma das especialidades disponíveis abaixo para começar sua reserva.',
+    description: 'Confira abaixo nossos serviços',
     cta: 'Escolher profissional',
   },
   2: {
@@ -99,6 +99,7 @@ const TikTokIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
+/** ===== Service Card: menor e sem espaço de imagem ===== */
 const ServiceCard: React.FC<{
   service: PublicService;
   active: boolean;
@@ -109,41 +110,26 @@ const ServiceCard: React.FC<{
     type="button"
     onClick={onSelect}
     className={clsx(
-      'group relative flex w-full flex-col gap-4 rounded-3xl border bg-white/85 p-5 text-left shadow-sm transition-all backdrop-blur',
-      active ? 'border-transparent ring-2 ring-offset-2 ring-offset-white' : 'border-gray-200/70 hover:-translate-y-0.5 hover:border-gray-300'
+      'group relative w-full rounded-2xl border bg-white/85 p-4 text-left shadow-sm transition-all backdrop-blur',
+      active
+        ? 'border-transparent ring-2 ring-offset-2 ring-offset-white'
+        : 'border-gray-200/70 hover:-translate-y-0.5 hover:border-gray-300'
     )}
-    style={active ? { background: `linear-gradient(135deg, ${accent}1A, ${accent}05)` } : undefined}
+    style={active ? { background: `linear-gradient(135deg, ${accent}12, ${accent}06)` } : undefined}
   >
-    <div className="flex items-start gap-4">
-      {service.service_pic ? (
-        <img src={service.service_pic} alt={service.name} className="h-16 w-16 flex-shrink-0 rounded-2xl object-cover ring-1 ring-black/5" />
-      ) : (
-        <div className="grid h-16 w-16 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
-          <Sparkles className="h-6 w-6" />
-        </div>
-      )}
-      <div className="min-w-0 space-y-1.5">
-        <p className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500 shadow-sm">
-          <Sparkles className="h-3.5 w-3.5" />
-          Serviço
-        </p>
-        <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
-        {service.description && <p className="text-sm text-gray-600 line-clamp-3">{service.description}</p>}
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold text-gray-900">{service.name}</h3>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
           <span>{formatDuration(service.duration_min)}</span>
           <span>•</span>
           <span>{formatPrice(service.price_cents)}</span>
         </div>
+        {service.description && (
+          <p className="mt-1 text-xs text-gray-600 line-clamp-2">{service.description}</p>
+        )}
       </div>
-    </div>
-    <div
-      className={clsx(
-        'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-        active ? 'border-transparent bg-gray-900 text-white' : 'border-gray-200 text-gray-600 group-hover:border-gray-300 group-hover:text-gray-900'
-      )}
-    >
-      Selecionar
-      <ArrowRight className="h-4 w-4" />
+      <ArrowRight className={clsx('h-4 w-4 flex-shrink-0', active ? 'text-gray-900' : 'text-gray-400')} />
     </div>
   </button>
 );
@@ -159,12 +145,18 @@ const ProviderCard: React.FC<{
     onClick={onSelect}
     className={clsx(
       'flex w-full items-center gap-4 rounded-3xl border bg-white/85 px-4 py-3 text-left shadow-sm transition-all backdrop-blur',
-      active ? 'border-transparent ring-2 ring-offset-2 ring-offset-white' : 'border-gray-200/70 hover:-translate-y-0.5 hover:border-gray-300'
+      active
+        ? 'border-transparent ring-2 ring-offset-2 ring-offset-white'
+        : 'border-gray-200/70 hover:-translate-y-0.5 hover:border-gray-300'
     )}
     style={active ? { boxShadow: `0 25px 50px -25px ${accent}80` } : undefined}
   >
     {provider.profile_pic ? (
-      <img src={provider.profile_pic} alt={provider.full_name} className="h-14 w-14 flex-shrink-0 rounded-2xl object-cover ring-1 ring-black/5" />
+      <img
+        src={provider.profile_pic}
+        alt={provider.full_name}
+        className="h-14 w-14 flex-shrink-0 rounded-2xl object-cover ring-1 ring-black/5"
+      />
     ) : (
       <div className="grid h-14 w-14 flex-shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-semibold">
         {initials(provider.full_name)}
@@ -215,8 +207,9 @@ const SummaryCard: React.FC<{
   priceLabel?: string;
   durationLabel?: string;
   accent: string;
+  accentText?: string;
   className?: string;
-}> = ({ storeName, service, provider, slotLabel, slotDate, priceLabel, durationLabel, accent, className }) => (
+}> = ({ storeName, service, provider, slotLabel, slotDate, priceLabel, durationLabel, accent, accentText, className }) => (
   <aside className={clsx('rounded-3xl border border-gray-200 bg-white/80 p-6 shadow-sm backdrop-blur', className)}>
     <p className="text-xs uppercase tracking-wide text-gray-500">Resumo</p>
     <h3 className="mt-1 text-lg font-semibold text-gray-900">{storeName}</h3>
@@ -251,17 +244,13 @@ const SummaryCard: React.FC<{
         <span className="text-right text-gray-900">{priceLabel || '—'}</span>
       </div>
     </div>
-    <div
-      className="mt-6 rounded-2xl bg-gradient-to-br px-4 py-3 text-xs font-medium text-white shadow-sm"
-      style={{ background: `linear-gradient(135deg, ${accent}, ${accent}CC)` }}
-    >
+    <p className="mt-6 text-xs font-medium" style={{ color: accentText || accent }}>
       Confirmaremos sua reserva e enviaremos avisos por WhatsApp.
-    </div>
+    </p>
   </aside>
 );
 
 const SuccessView: React.FC<{
-  storeName: string;
   service?: PublicService | null;
   provider?: PublicTeamMember | null;
   slotLabel?: string | null;
@@ -333,33 +322,48 @@ const PublicStorePage: React.FC = () => {
   const accent = store?.primary_color || '#6366f1';
   const accentSecondary = store?.secondary_color || '#8b5cf6';
 
-  // Pré-preenche do localStorage (se existir)
-  React.useEffect(() => {
-    if (!store?.id) return;
-    try {
-      const raw = localStorage.getItem(`sr:contact:${store.id}`);
-      if (raw) {
+  /** ===== MEMÓRIA: load do localStorage (usa chave por storeId e por slug) ===== */
+  const loadSavedContact = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const keys = [
+      store?.id ? `sr:contact:${store.id}` : null,
+      slug ? `sr:contact:${slug}` : null,
+    ].filter(Boolean) as string[];
+    for (const k of keys) {
+      try {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
         const saved = JSON.parse(raw) as { name?: string; phone?: string };
-        if (saved?.name) setCustomerName(saved.name);
-        if (saved?.phone) setCustomerPhone(maskPhone(saved.phone));
-      }
-    } catch {}
-  }, [store?.id]);
+        if (saved?.name && !customerName) setCustomerName(saved.name);
+        if (saved?.phone && !customerPhone) setCustomerPhone(maskPhone(saved.phone));
+        break;
+      } catch {}
+    }
+  }, [store?.id, slug, customerName, customerPhone]);
 
-  // reset ao trocar de seleção
+  React.useEffect(() => {
+    loadSavedContact();
+  }, [loadSavedContact]);
+
+  React.useEffect(() => {
+    if (step === 4) loadSavedContact();
+  }, [step, loadSavedContact]);
+
+  /** resets */
   React.useEffect(() => {
     setSelectedProviderId(null);
     setSelectedDayKey(null);
     setSelectedSlotIso(null);
     setShowSummary(false);
   }, [selectedServiceId]);
+
   React.useEffect(() => {
     setSelectedDayKey(null);
     setSelectedSlotIso(null);
     setShowSummary(false);
   }, [selectedProviderId]);
 
-  // escolhe primeiro dia/slot com disponibilidade
+  /** escolher 1º dia/slot */
   React.useEffect(() => {
     if (!selectedService || !selectedProvider) return;
     if (!availability.days.length) {
@@ -367,6 +371,7 @@ const PublicStorePage: React.FC = () => {
       setSelectedSlotIso(null);
       return;
     }
+
     const currentDayHasSlots =
       selectedDayKey && availability.slotsByDay[selectedDayKey]?.length;
     if (currentDayHasSlots) {
@@ -379,7 +384,10 @@ const PublicStorePage: React.FC = () => {
       }
       return;
     }
-    const firstDay = availability.days.find((day) => availability.slotsByDay[day.key]?.length);
+
+    const firstDay = availability.days.find(
+      (day) => availability.slotsByDay[day.key]?.length
+    );
     if (firstDay) {
       setSelectedDayKey(firstDay.key);
       const firstSlot = availability.slotsByDay[firstDay.key]?.[0]?.isoStart ?? null;
@@ -388,7 +396,14 @@ const PublicStorePage: React.FC = () => {
       setSelectedDayKey(null);
       setSelectedSlotIso(null);
     }
-  }, [availability.days, availability.slotsByDay, selectedService, selectedProvider, selectedDayKey, selectedSlotIso]);
+  }, [
+    availability.days,
+    availability.slotsByDay,
+    selectedService,
+    selectedProvider,
+    selectedDayKey,
+    selectedSlotIso,
+  ]);
 
   const selectedSlot = React.useMemo(() => {
     if (!selectedDayKey || !selectedSlotIso) return null;
@@ -399,9 +414,11 @@ const PublicStorePage: React.FC = () => {
   React.useEffect(() => {
     if (!selectedServiceId && step > 1) setStep(1);
   }, [selectedServiceId, step]);
+
   React.useEffect(() => {
     if (!selectedProviderId && step > 2) setStep(2);
   }, [selectedProviderId, step]);
+
   React.useEffect(() => {
     if (!selectedSlotIso && step > 3) setStep(3);
   }, [selectedSlotIso, step]);
@@ -409,7 +426,12 @@ const PublicStorePage: React.FC = () => {
   const digitsPhone = onlyDigits(customerPhone);
   const phoneValid = digitsPhone.length >= 10;
   const fieldsValid =
-    !!store && !!selectedService && !!selectedProvider && !!selectedSlot && customerName.trim().length >= 2 && phoneValid;
+    !!store &&
+    !!selectedService &&
+    !!selectedProvider &&
+    !!selectedSlot &&
+    customerName.trim().length >= 2 &&
+    phoneValid;
   const canSubmit = fieldsValid && !creating;
 
   const resetForm = () => {
@@ -430,8 +452,10 @@ const PublicStorePage: React.FC = () => {
 
   const handleCreateBooking = async () => {
     if (!canSubmit || !store || !selectedService || !selectedProvider || !selectedSlot) return;
+
     try {
       setCreating(true);
+
       const { data, error: fnError } = await supabase.functions.invoke('app/public-booking', {
         body: {
           businessId: store.business_id,
@@ -449,15 +473,15 @@ const PublicStorePage: React.FC = () => {
           },
         },
       });
+
       if (fnError) throw fnError;
       if (data?.error) throw new Error(data.error);
 
-      // salva memória SOMENTE após sucesso
+      // salva memória SOMENTE após sucesso (duas chaves pra garantir)
       try {
-        localStorage.setItem(
-          `sr:contact:${store.id}`,
-          JSON.stringify({ name: customerName.trim(), phone: digitsPhone })
-        );
+        const payload = JSON.stringify({ name: customerName.trim(), phone: digitsPhone });
+        if (store?.id) localStorage.setItem(`sr:contact:${store.id}`, payload);
+        if (slug) localStorage.setItem(`sr:contact:${slug}`, payload);
       } catch {}
 
       setCreatedBookingId(data?.booking?.booking_id ?? selectedSlot.isoStart);
@@ -500,57 +524,77 @@ const PublicStorePage: React.FC = () => {
   const addressOneLine = (store as any).address_one_line || null;
   const whatsapp = (store as any).whatsapp || null;
 
+  /** HEADER: sem chip, logo menor ao lado do nome no mobile, header mais curto */
   const Header = (
     <header className="relative overflow-hidden text-white">
       <div className="absolute inset-0">
         {store.cover_url ? (
           <>
             <img src={store.cover_url} alt={store.name ?? 'Foto de capa'} className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-br from-black/90 via-black/75 to-black/60" />
+            <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-black/55" />
           </>
         ) : (
           <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }} />
         )}
       </div>
-      <div className="relative z-10 mx-auto flex min-h-[180px] lg:min-h-[220px] max-w-5xl flex-col justify-end px-6 pb-8 pt-10">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+      <div className="relative z-10 mx-auto flex min-h-[120px] lg:min-h-[160px] max-w-5xl flex-col justify-end px-6 pb-5 pt-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          {/* bloco logo + nome */}
+          <div className="flex items-center gap-3">
             {store.logo_url ? (
-              <img src={store.logo_url} alt={store.name ?? 'Logo'} className="h-20 w-20 rounded-3xl border border-white/30 object-cover shadow-lg" />
+              <img
+                src={store.logo_url}
+                alt={store.name ?? 'Logo'}
+                className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl border border-white/30 object-cover shadow-lg"
+              />
             ) : (
-              <div className="grid h-20 w-20 place-items-center rounded-3xl border border-white/20 bg-white/10 text-2xl font-semibold">
+              <div className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-sm sm:text-base font-semibold">
                 {initials(store.name)}
               </div>
             )}
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-wide">
-                {store.slug ? <>suareserva.online/{store.slug}</> : <>link público em breve</>}
-              </div>
-              <h1 className="mt-2 text-3xl font-black sm:text-4xl">{store.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black">{store.name}</h1>
               {addressOneLine && (
-                <p className="mt-1 flex items-center gap-2 text-xs text-white/80">
-                  <MapPin className="h-3.5 w-3.5 text-white/70" />
+                <p className="mt-0.5 flex items-center gap-2 text-[11px] sm:text-xs text-white/80">
+                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/70" />
                   <span>{addressOneLine}</span>
                 </p>
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+
+          {/* Redes sociais — menores e centralizadas no mobile */}
+          <div className="flex flex-wrap gap-1.5 justify-center md:justify-end">
             {store.instagram_url && (
-              <a href={store.instagram_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20">
-                <Instagram className="h-4 w-4" />
+              <a
+                href={store.instagram_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] md:px-3 md:py-1.5 md:text-xs font-medium transition hover:bg-white/20"
+              >
+                <Instagram className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 Instagram
               </a>
             )}
             {store.tiktok_url && (
-              <a href={store.tiktok_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20">
-                <TikTokIcon className="h-4 w-4" />
+              <a
+                href={store.tiktok_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] md:px-3 md:py-1.5 md:text-xs font-medium transition hover:bg-white/20"
+              >
+                <TikTokIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 TikTok
               </a>
             )}
             {whatsapp && (
-              <a href={`https://wa.me/${onlyDigits(whatsapp)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium transition hover:bg-white/20">
-                <Phone className="h-4 w-4" />
+              <a
+                href={`https://wa.me/${onlyDigits(whatsapp)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[11px] md:px-3 md:py-1.5 md:text-xs font-medium transition hover:bg-white/20"
+              >
+                <Phone className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 WhatsApp
               </a>
             )}
@@ -560,7 +604,7 @@ const PublicStorePage: React.FC = () => {
     </header>
   );
 
-  // Sucesso (mantém header padrão)
+  /** SUCESSO (mantém header padrão) */
   if (createdBookingId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900">
@@ -594,7 +638,7 @@ const PublicStorePage: React.FC = () => {
           {!desktopConfirmView ? (
             <>
               <section className="space-y-8 min-w-0">
-                <div className="space-y-5 rounded-3xl border border-gray-200 bg-white/85 p-6 shadow-sm backdrop-blur max-w-full overflow-hidden">
+                <div className={clsx('space-y-5 rounded-3xl border border-gray-200 bg-white/85 p-6 shadow-sm backdrop-blur max-w-full overflow-hidden', step === 1 && selectedServiceId ? 'pb-24' : '')}>
                   {/* Cabeçalho das etapas */}
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -607,36 +651,51 @@ const PublicStorePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Passo 1 */}
+                  {/* ===== Passo 1 ===== */}
                   {step === 1 && (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       {services.length === 0 ? (
                         <EmptyState title="Nenhum serviço disponível" message="A loja ainda não publicou serviços para agendamento online." />
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {services.map((svc) => (
-                            <ServiceCard key={svc.id} service={svc} active={svc.id === selectedServiceId} onSelect={() => setSelectedServiceId(svc.id)} accent={accent} />
+                            <ServiceCard
+                              key={svc.id}
+                              service={svc}
+                              active={svc.id === selectedServiceId}
+                              onSelect={() => setSelectedServiceId(svc.id)}
+                              accent={accent}
+                            />
                           ))}
                         </div>
                       )}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                        <button
-                          type="button"
-                          onClick={nextStep}
-                          disabled={!selectedServiceId}
-                          className={clsx(
-                            'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                            selectedServiceId ? 'bg-gray-900 hover:bg-gray-800' : 'cursor-not-allowed bg-gray-300'
-                          )}
-                        >
-                          {STEP_CONTENT[step].cta}
-                          <ArrowRight className="h-4 w-4" />
-                        </button>
-                      </div>
+
+                      {/* CTA padrão quando nada selecionado */}
+                      {!selectedServiceId && (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                          <button
+                            type="button"
+                            onClick={nextStep}
+                            disabled={!selectedServiceId}
+                            className={clsx(
+                              'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
+                              selectedServiceId ? '' : 'cursor-not-allowed opacity-60'
+                            )}
+                            style={
+                              selectedServiceId
+                                ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                                : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                            }
+                          >
+                            {STEP_CONTENT[step].cta}
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Passo 2 */}
+                  {/* ===== Passo 2 ===== */}
                   {step === 2 && (
                     <div className="space-y-6">
                       {selectedService?.providers.length === 0 ? (
@@ -648,6 +707,7 @@ const PublicStorePage: React.FC = () => {
                           ))}
                         </div>
                       )}
+
                       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
                         <button type="button" onClick={prevStep} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-400">
                           <ArrowLeft className="h-4 w-4" />
@@ -657,10 +717,12 @@ const PublicStorePage: React.FC = () => {
                           type="button"
                           onClick={nextStep}
                           disabled={!selectedProviderId}
-                          className={clsx(
-                            'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                            selectedProviderId ? 'bg-gray-900 hover:bg-gray-800' : 'cursor-not-allowed bg-gray-300'
-                          )}
+                          className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white', !selectedProviderId && 'cursor-not-allowed opacity-60')}
+                          style={
+                            selectedProviderId
+                              ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                              : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                          }
                         >
                           {STEP_CONTENT[step].cta}
                           <ArrowRight className="h-4 w-4" />
@@ -669,7 +731,7 @@ const PublicStorePage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Passo 3 — FIX: container não cresce, scroll só dentro da faixa de dias */}
+                  {/* ===== Passo 3 (dias/horários) ===== */}
                   {step === 3 && (
                     <div className="space-y-6">
                       {availability.loading ? (
@@ -680,11 +742,8 @@ const PublicStorePage: React.FC = () => {
                         <EmptyState title="Sem horários nesses próximos dias" message="Não encontramos horários disponíveis nesse período. Tente um profissional diferente ou volte mais tarde." />
                       ) : (
                         <>
-                          {/* DIAS */}
-                          <div
-                            className="w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none]"
-                            style={{ WebkitOverflowScrolling: 'touch' as any }}
-                          >
+                          {/* Dias (scroll interno) */}
+                          <div className="w-full overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [-ms-overflow-style:none]" style={{ WebkitOverflowScrolling: 'touch' as any }}>
                             <div className="grid auto-cols-[7rem] grid-flow-col gap-3">
                               {availability.days.map((day) => {
                                 const hasSlots = availability.slotsByDay[day.key]?.length;
@@ -719,7 +778,7 @@ const PublicStorePage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* HORÁRIOS — grid compacto */}
+                          {/* Horários (grid compacto) */}
                           {selectedDayKey && availability.slotsByDay[selectedDayKey]?.length ? (
                             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
                               {availability.slotsByDay[selectedDayKey].map((slot) => (
@@ -745,11 +804,7 @@ const PublicStorePage: React.FC = () => {
                       )}
 
                       <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-                        <button
-                          type="button"
-                          onClick={prevStep}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-400"
-                        >
+                        <button type="button" onClick={prevStep} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-400">
                           <ArrowLeft className="h-4 w-4" />
                           Voltar
                         </button>
@@ -757,10 +812,12 @@ const PublicStorePage: React.FC = () => {
                           type="button"
                           onClick={nextStep}
                           disabled={!selectedSlot}
-                          className={clsx(
-                            'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                            selectedSlot ? 'bg-gray-900 hover:bg-gray-800' : 'cursor-not-allowed bg-gray-300'
-                          )}
+                          className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white', !selectedSlot && 'cursor-not-allowed opacity-60')}
+                          style={
+                            selectedSlot
+                              ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                              : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                          }
                         >
                           {STEP_CONTENT[step].cta}
                           <ArrowRight className="h-4 w-4" />
@@ -769,16 +826,14 @@ const PublicStorePage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Passo 4 */}
+                  {/* ===== Passo 4 ===== */}
                   {step === 4 && (
                     <div className="space-y-6">
                       {!showSummary && (
                         <>
                           <div className="grid gap-6">
                             <div>
-                              <label className="text-sm font-semibold text-gray-700" htmlFor="customerName">
-                                Nome completo
-                              </label>
+                              <label className="text-sm font-semibold text-gray-700" htmlFor="customerName">Nome completo</label>
                               <input
                                 id="customerName"
                                 value={customerName}
@@ -789,9 +844,7 @@ const PublicStorePage: React.FC = () => {
                             </div>
 
                             <div>
-                              <label className="text-sm font-semibold text-gray-700" htmlFor="customerPhone">
-                                Telefone / WhatsApp
-                              </label>
+                              <label className="text-sm font-semibold text-gray-700" htmlFor="customerPhone">Telefone / WhatsApp</label>
                               <input
                                 id="customerPhone"
                                 value={customerPhone}
@@ -806,9 +859,7 @@ const PublicStorePage: React.FC = () => {
                             </div>
 
                             <div>
-                              <label className="text-sm font-semibold text-gray-700" htmlFor="notes">
-                                Observações (opcional)
-                              </label>
+                              <label className="text-sm font-semibold text-gray-700" htmlFor="notes">Observações (opcional)</label>
                               <textarea
                                 id="notes"
                                 value={notes}
@@ -830,8 +881,12 @@ const PublicStorePage: React.FC = () => {
                               type="button"
                               onClick={() => fieldsValid && setShowSummary(true)}
                               disabled={!fieldsValid}
-                              className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition', fieldsValid ? '' : 'cursor-not-allowed opacity-60')}
-                              style={fieldsValid ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` } : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }}
+                              className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition', !fieldsValid && 'cursor-not-allowed opacity-60')}
+                              style={
+                                fieldsValid
+                                  ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                                  : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                              }
                             >
                               Avançar
                               <ArrowRight className="h-4 w-4" />
@@ -852,20 +907,25 @@ const PublicStorePage: React.FC = () => {
                             priceLabel={formatPrice(selectedService?.price_cents)}
                             durationLabel={formatDuration(selectedService?.duration_min)}
                             accent={accent}
+                            accentText={accentSecondary}
                           />
-                          <button
-                            type="button"
-                            onClick={handleCreateBooking}
-                            disabled={!canSubmit}
-                            className={clsx(
-                              'w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                              canSubmit ? '' : 'cursor-not-allowed opacity-60'
-                            )}
-                            style={canSubmit ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` } : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }}
-                          >
-                            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                            {STEP_CONTENT[step].cta}
-                          </button>
+                          {/* botão centralizado e não full-width */}
+                          <div className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={handleCreateBooking}
+                              disabled={!canSubmit}
+                              className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white', !canSubmit && 'cursor-not-allowed opacity-60')}
+                              style={
+                                canSubmit
+                                  ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                                  : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                              }
+                            >
+                              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                              {STEP_CONTENT[step].cta}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -884,26 +944,30 @@ const PublicStorePage: React.FC = () => {
                   priceLabel={formatPrice(selectedService?.price_cents)}
                   durationLabel={formatDuration(selectedService?.duration_min)}
                   accent={accent}
+                  accentText={accentSecondary}
                 />
                 {step === 4 && showSummary && (
-                  <button
-                    type="button"
-                    onClick={handleCreateBooking}
-                    disabled={!canSubmit}
-                    className={clsx(
-                      'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                      canSubmit ? '' : 'cursor-not-allowed opacity-60'
-                    )}
-                    style={canSubmit ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` } : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }}
-                  >
-                    {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    {STEP_CONTENT[step].cta}
-                  </button>
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={handleCreateBooking}
+                      disabled={!canSubmit}
+                      className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white', !canSubmit && 'cursor-not-allowed opacity-60')}
+                      style={
+                        canSubmit
+                          ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                          : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                      }
+                    >
+                      {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {STEP_CONTENT[step].cta}
+                    </button>
+                  </div>
                 )}
               </div>
             </>
           ) : (
-            // Desktop: omite etapas e centraliza confirmação
+            // Desktop: omite etapas e centraliza a confirmação
             <div className="space-y-4">
               <SummaryCard
                 storeName={store.name}
@@ -914,24 +978,45 @@ const PublicStorePage: React.FC = () => {
                 priceLabel={formatPrice(selectedService?.price_cents)}
                 durationLabel={formatDuration(selectedService?.duration_min)}
                 accent={accent}
+                accentText={accentSecondary}
               />
-              <button
-                type="button"
-                onClick={handleCreateBooking}
-                disabled={!canSubmit}
-                className={clsx(
-                  'w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white',
-                  canSubmit ? '' : 'cursor-not-allowed opacity-60'
-                )}
-                style={canSubmit ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` } : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }}
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {STEP_CONTENT[step].cta}
-              </button>
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleCreateBooking}
+                  disabled={!canSubmit}
+                  className={clsx('inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white', !canSubmit && 'cursor-not-allowed opacity-60')}
+                  style={
+                    canSubmit
+                      ? { background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }
+                      : { background: 'linear-gradient(135deg, #cbd5f5, #e2e8f0)' }
+                  }
+                >
+                  {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {STEP_CONTENT[step].cta}
+                </button>
+              </div>
             </div>
           )}
         </div>
       </main>
+
+      {/* ===== Barra fixa (rodapé) do PASSO 1 quando há serviço selecionado — CENTRALIZADA e com as cores da loja ===== */}
+      {step === 1 && selectedServiceId && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center justify-center px-6 py-3">
+            <button
+              type="button"
+              onClick={nextStep}
+              className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-white shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }}
+            >
+              Prosseguir e escolher profissional
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addDays, addMinutes, isBefore } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+import { ptBR } from 'date-fns/locale';
 import type { StoreHourRow, StoreRow } from './useStores';
 import type { PublicService, PublicTeamMember } from './usePublicStore';
 
@@ -16,9 +17,9 @@ export type AvailabilitySlot = {
 export type AvailabilityDay = {
   key: string;
   date: Date;
-  weekday: string;
-  dayNumber: string;
-  fullLabel: string;
+  weekday: string;   // seg, ter, qua...
+  dayNumber: string; // 1..31
+  fullLabel: string; // segunda, 20 de outubro
   hasSlots: boolean;
 };
 
@@ -53,7 +54,6 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
     }
 
     setLoading(true);
-
     try {
       const now = new Date();
       const dayMap: Record<string, AvailabilitySlot[]> = {};
@@ -69,9 +69,9 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
         const meta: AvailabilityDay = {
           key: dayKey,
           date: fromZonedTime(`${dayKey}T00:00:00`, timezone),
-          weekday: formatInTimeZone(dayRef, timezone, 'EEE'),
-          dayNumber: formatInTimeZone(dayRef, timezone, 'd'),
-          fullLabel: formatInTimeZone(dayRef, timezone, "EEEE, d 'de' MMMM"),
+          weekday: formatInTimeZone(dayRef, timezone, 'EEE', { locale: ptBR }),
+          dayNumber: formatInTimeZone(dayRef, timezone, 'd', { locale: ptBR }),
+          fullLabel: formatInTimeZone(dayRef, timezone, "EEEE, d 'de' MMMM", { locale: ptBR }),
           hasSlots: false,
         };
 
@@ -94,7 +94,7 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
             continue;
           }
 
-          // Sem checagem de bookings — disponibilidade total (até providerCapacity)
+          // disponibilidade otimista (sem checar bookings)
           if (providerCapacity >= 1) {
             const slot: AvailabilitySlot = {
               dayKey,
@@ -102,7 +102,7 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
               end: serviceEnd,
               isoStart: cursor.toISOString(),
               isoEnd: serviceEnd.toISOString(),
-              label: formatInTimeZone(cursor, timezone, 'HH:mm'),
+              label: formatInTimeZone(cursor, timezone, 'HH:mm', { locale: ptBR }),
             };
             daySlots.push(slot);
           }
@@ -137,16 +137,7 @@ export function useAvailability({ store, hours, service, provider, horizonDays =
     refresh();
   }, [refresh]);
 
-  const hasAnySlot = useMemo(
-    () => Object.values(slotsByDay).some((day) => day.length > 0),
-    [slotsByDay]
-  );
+  const hasAnySlot = useMemo(() => Object.values(slotsByDay).some((day) => day.length > 0), [slotsByDay]);
 
-  return {
-    loading,
-    slotsByDay,
-    days,
-    hasAnySlot,
-    refresh,
-  };
+  return { loading, slotsByDay, days, hasAnySlot, refresh };
 }
