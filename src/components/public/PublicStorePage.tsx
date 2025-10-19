@@ -26,7 +26,7 @@ type Step = 1 | 2 | 3 | 4;
 const STEP_CONTENT: Record<Step, { headline: string; description: string; cta: string }> = {
   1: {
     headline: 'Gostaria de reservar um serviço?',
-    description: 'Confira abaixo nossos serviços',
+    description: 'Confira abaixo nossos serviços.',
     cta: 'Escolher profissional',
   },
   2: {
@@ -389,7 +389,7 @@ const PublicStorePage: React.FC = () => {
       (day) => availability.slotsByDay[day.key]?.length
     );
     if (firstDay) {
-      setSelectedDayKey(firstDay.key);
+      setSelectedDayKey(first.key);
       const firstSlot = availability.slotsByDay[firstDay.key]?.[0]?.isoStart ?? null;
       setSelectedSlotIso(firstSlot);
     } else {
@@ -524,7 +524,7 @@ const PublicStorePage: React.FC = () => {
   const addressOneLine = (store as any).address_one_line || null;
   const whatsapp = (store as any).whatsapp || null;
 
-  /** HEADER: sem chip, logo menor ao lado do nome no mobile, header mais curto */
+  /** HEADER: logo acima do nome (um pouco maior no mobile) + header um pouco mais alto */
   const Header = (
     <header className="relative overflow-hidden text-white">
       <div className="absolute inset-0">
@@ -537,25 +537,26 @@ const PublicStorePage: React.FC = () => {
           <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${accent}, ${accentSecondary})` }} />
         )}
       </div>
-      <div className="relative z-10 mx-auto flex min-h-[120px] lg:min-h-[160px] max-w-5xl flex-col justify-end px-6 pb-5 pt-6">
+      <div className="relative z-10 mx-auto flex min-h-[140px] lg:min-h-[180px] max-w-5xl flex-col justify-end px-6 pb-6 pt-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          {/* bloco logo + nome */}
-          <div className="flex items-center gap-3">
+          {/* Bloco esquerdo: logo em cima, nome embaixo */}
+          <div className="flex flex-col items-start gap-2">
             {store.logo_url ? (
               <img
                 src={store.logo_url}
                 alt={store.name ?? 'Logo'}
-                className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl border border-white/30 object-cover shadow-lg"
+                className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl border border-white/30 object-cover shadow-lg"
               />
             ) : (
-              <div className="grid h-10 w-10 sm:h-12 sm:w-12 place-items-center rounded-2xl border border-white/20 bg-white/10 text-sm sm:text-base font-semibold">
+              <div className="grid h-12 w-12 sm:h-14 sm:w-14 place-items-center rounded-2xl border border-white/20 bg-white/10 text-base sm:text-lg font-semibold">
                 {initials(store.name)}
               </div>
             )}
+
             <div>
               <h1 className="text-2xl sm:text-3xl font-black">{store.name}</h1>
               {addressOneLine && (
-                <p className="mt-0.5 flex items-center gap-2 text-[11px] sm:text-xs text-white/80">
+                <p className="mt-1 flex items-center gap-2 text-[11px] sm:text-xs text-white/80">
                   <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white/70" />
                   <span>{addressOneLine}</span>
                 </p>
@@ -563,8 +564,8 @@ const PublicStorePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Redes sociais — menores e centralizadas no mobile */}
-          <div className="flex flex-wrap gap-1.5 justify-center md:justify-end">
+          {/* Redes sociais — menores e centralizadas no mobile, à direita no desktop */}
+          <div className="flex flex-wrap gap-1.5 justify-left md:justify-end">
             {store.instagram_url && (
               <a
                 href={store.instagram_url}
@@ -643,7 +644,7 @@ const PublicStorePage: React.FC = () => {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <span className="text-xs uppercase tracking-wide text-gray-500">Passo {step} de 4</span>
-                      <h2 className="mt-2 text-2xl font-semibold text-gray-900">{STEP_CONTENT[step].headline}</h2>
+                      <h2 className="mt-2 text-xl font-semibold text-gray-900">{STEP_CONTENT[step].headline}</h2>
                       <p className="mt-2 text-sm text-gray-600">{STEP_CONTENT[step].description}</p>
                     </div>
                     <div className="sm:w-48">
@@ -1001,7 +1002,7 @@ const PublicStorePage: React.FC = () => {
         </div>
       </main>
 
-      {/* ===== Barra fixa (rodapé) do PASSO 1 quando há serviço selecionado — CENTRALIZADA e com as cores da loja ===== */}
+      {/* ===== Barra fixa (rodapé) do PASSO 1 quando há serviço selecionado ===== */}
       {step === 1 && selectedServiceId && (
         <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center justify-center px-6 py-3">
