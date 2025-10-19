@@ -1,7 +1,10 @@
+// hooks/useAvailability.ts
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { addDays, addMinutes, isBefore } from 'date-fns';
+import { addDays } from 'date-fns';
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { ptBR } from 'date-fns/locale';
+import { supabase } from '../lib/supabase';
+
 import type { StoreHourRow, StoreRow } from './useStores';
 import type { PublicService, PublicTeamMember } from './usePublicStore';
 
@@ -19,125 +22,133 @@ export type AvailabilityDay = {
   date: Date;
   weekday: string;   // seg, ter, qua...
   dayNumber: string; // 1..31
-  fullLabel: string; // segunda, 20 de outubro
+  fullLabel: string; // segunda-feira, 20 de outubro
   hasSlots: boolean;
 };
 
 type Params = {
   store: StoreRow | null;
+  /** Mantido por compatibilidade, mas não é usado aqui — o RPC já aplica os horários. */
   hours: StoreHourRow[];
   service: PublicService | null;
   provider: PublicTeamMember | null;
+  /** por padrão, pedimos até 30 dias; nunca ultrapassamos 30 */
   horizonDays?: number;
 };
 
-export function useAvailability({ store, hours, service, provider, horizonDays = 10 }: Params) {
+export function useAvailability({
+  store,
+  hours, // eslint-disable-line @typescript-eslint/no-unused-vars
+  service,
+  provider,
+  horizonDays = 30,
+}: Params) {
   const [loading, setLoading] = useState(false);
   const [slotsByDay, setSlotsByDay] = useState<Record<string, AvailabilitySlot[]>>({});
   const [days, setDays] = useState<AvailabilityDay[]>([]);
-
-  const hoursMap = useMemo(() => {
-    const map = new Map<number, StoreHourRow>();
-    hours?.forEach((row) => map.set(row.day_of_week, row));
-    return map;
-  }, [hours]);
+  const [error, setError] = useState<string | null>(null);
 
   const timezone = store?.timezone || 'America/Sao_Paulo';
-  const slotStep = Math.max(store?.slot_duration_min ?? service?.duration_min ?? 30, 5);
-  const providerCapacity = Math.max(provider?.max_parallel ?? 1, 1);
+  const windowDays = Math.min(Math.max(horizonDays ?? 30, 0), 30);
 
   const refresh = useCallback(async () => {
     if (!store || !service || !provider) {
       setSlotsByDay({});
       setDays([]);
+      setError(null);
       return;
     }
 
     setLoading(true);
+    setError(null);
+
     try {
       const now = new Date();
-      const dayMap: Record<string, AvailabilitySlot[]> = {};
-      const dayList: AvailabilityDay[] = [];
 
-      for (let offset = 0; offset < horizonDays; offset++) {
+      // 1) Busca os slots no RPC (apenas buffer_after, expediente, step/duração já aplicados no servidor)
+      const { data, error: rpcErr } = await supabase.rpc('get_public_availability', {
+        p_store_id: store.id,
+        p_service_id: service.id,
+        p_team_member_id: provider.id,
+        p_from: now.toISOString(),
+        p_days: windowDays,
+      });
+
+      if (rpcErr) throw rpcErr;
+
+      const rows: Array<{ day_key: string | Date; start_ts: string; end_ts: string }> = data ?? [];
+
+      // 2) Agrupa por dia (em tz da loja)
+      const grouped: Record<string, AvailabilitySlot[]> = {};
+      for (const r of rows) {
+        // usamos o start_ts para derivar a chave do dia no tz da loja
+        const start = new Date(r.start_ts);
+        const end = new Date(r.end_ts);
+        const dayKey = formatInTimeZone(start, timezone, 'yyyy-MM-dd', { locale: ptBR });
+
+        const slot: AvailabilitySlot = {
+          dayKey,
+          start,
+          end,
+          isoStart: start.toISOString(),
+          isoEnd: end.toISOString(),
+          label: formatInTimeZone(start, timezone, 'HH:mm', { locale: ptBR }),
+        };
+
+        if (!grouped[dayKey]) grouped[dayKey] = [];
+        grouped[dayKey].push(slot);
+      }
+
+      // ordena slots de cada dia
+      Object.values(grouped).forEach((list) =>
+        list.sort((a, b) => a.start.getTime() - b.start.getTime())
+      );
+
+      // 3) Constrói a lista de dias do horizonte (mesmo sem slots, mantemos no grid)
+      const dayList: AvailabilityDay[] = [];
+      for (let offset = 0; offset <= windowDays; offset++) {
         const dayRef = addDays(now, offset);
-        const isoDow = Number(formatInTimeZone(dayRef, timezone, 'i')); // 1=Mon..7=Sun
-        const dow = isoDow === 7 ? 0 : isoDow;
-        const hoursRow = hoursMap.get(dow);
-        const dayKey = formatInTimeZone(dayRef, timezone, 'yyyy-MM-dd');
+        const key = formatInTimeZone(dayRef, timezone, 'yyyy-MM-dd', { locale: ptBR });
 
         const meta: AvailabilityDay = {
-          key: dayKey,
-          date: fromZonedTime(`${dayKey}T00:00:00`, timezone),
+          key,
+          date: fromZonedTime(`${key}T00:00:00`, timezone),
           weekday: formatInTimeZone(dayRef, timezone, 'EEE', { locale: ptBR }),
           dayNumber: formatInTimeZone(dayRef, timezone, 'd', { locale: ptBR }),
           fullLabel: formatInTimeZone(dayRef, timezone, "EEEE, d 'de' MMMM", { locale: ptBR }),
-          hasSlots: false,
+          hasSlots: Boolean(grouped[key]?.length),
         };
-
-        if (!hoursRow || hoursRow.is_closed || !hoursRow.open_time || !hoursRow.close_time) {
-          dayList.push(meta);
-          continue;
-        }
-
-        const openUtc = fromZonedTime(`${dayKey}T${hoursRow.open_time}`, timezone);
-        const closeUtc = fromZonedTime(`${dayKey}T${hoursRow.close_time}`, timezone);
-
-        const daySlots: AvailabilitySlot[] = [];
-        let cursor = openUtc;
-
-        while (!isBefore(closeUtc, cursor)) {
-          const serviceEnd = addMinutes(cursor, service.duration_min);
-          if (serviceEnd > closeUtc) break;
-          if (cursor <= now) {
-            cursor = addMinutes(cursor, slotStep);
-            continue;
-          }
-
-          // disponibilidade otimista (sem checar bookings)
-          if (providerCapacity >= 1) {
-            const slot: AvailabilitySlot = {
-              dayKey,
-              start: cursor,
-              end: serviceEnd,
-              isoStart: cursor.toISOString(),
-              isoEnd: serviceEnd.toISOString(),
-              label: formatInTimeZone(cursor, timezone, 'HH:mm', { locale: ptBR }),
-            };
-            daySlots.push(slot);
-          }
-
-          cursor = addMinutes(cursor, slotStep);
-        }
-
-        if (daySlots.length) {
-          dayMap[dayKey] = daySlots;
-          meta.hasSlots = true;
-        }
 
         dayList.push(meta);
       }
 
-      Object.values(dayMap).forEach((list) =>
-        list.sort((a, b) => a.start.getTime() - b.start.getTime())
-      );
-
-      setSlotsByDay(dayMap);
+      setSlotsByDay(grouped);
       setDays(dayList);
-    } catch (err) {
-      console.error(err);
+    } catch (e: any) {
+      console.error(e);
       setSlotsByDay({});
       setDays([]);
+      setError('Não foi possível carregar horários disponíveis.');
     } finally {
       setLoading(false);
     }
-  }, [store, service, provider, horizonDays, hoursMap, timezone, slotStep, providerCapacity]);
+  }, [store, service, provider, timezone, windowDays]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const hasAnySlot = useMemo(() => Object.values(slotsByDay).some((day) => day.length > 0), [slotsByDay]);
+  const hasAnySlot = useMemo(
+    () => Object.values(slotsByDay).some((list) => list.length > 0),
+    [slotsByDay]
+  );
 
-  return { loading, slotsByDay, days, hasAnySlot, refresh };
+  return {
+    loading,
+    slotsByDay,
+    days,
+    hasAnySlot,
+    error,
+    refresh,
+  };
 }

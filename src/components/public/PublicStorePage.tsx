@@ -389,7 +389,7 @@ const PublicStorePage: React.FC = () => {
       (day) => availability.slotsByDay[day.key]?.length
     );
     if (firstDay) {
-      setSelectedDayKey(first.key);
+      setSelectedDayKey(firstDay.key); // <-- FIX: usar firstDay.key
       const firstSlot = availability.slotsByDay[firstDay.key]?.[0]?.isoStart ?? null;
       setSelectedSlotIso(firstSlot);
     } else {

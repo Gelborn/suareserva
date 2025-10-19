@@ -37,9 +37,7 @@ import {
 import { ptBR } from "date-fns/locale";
 import { Listbox, Transition } from "@headlessui/react";
 
-/* -------------------------------------------------------------------------- */
-/*                      date-fns-tz: compat CJS/ESM segura                     */
-/* -------------------------------------------------------------------------- */
+/* ----------------------- date-fns-tz compat CJS/ESM ----------------------- */
 import * as dateFnsTz from "date-fns-tz";
 const _tz: any = (dateFnsTz as any) || {};
 const tzHas = (k: string) => _tz && typeof _tz[k] === "function";
@@ -69,10 +67,7 @@ const formatInTimeZone = (date: Date, timeZone: string, fmt: string, opts?: any)
     ? _tz.formatInTimeZone(date, timeZone, fmt, opts)
     : format(utcToZonedTime(date, timeZone), fmt, opts);
 
-/* -------------------------------------------------------------------------- */
-/*                               helpers & hooks                               */
-/* -------------------------------------------------------------------------- */
-
+/* --------------------------------- helpers -------------------------------- */
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const timeToMinutes = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -88,10 +83,7 @@ const parseHH = (t?: string | null) => {
   return H * 60 + (Number.isNaN(M) ? 0 : M);
 };
 
-/* -------------------------------------------------------------------------- */
-/*                                   STATUS                                   */
-/* -------------------------------------------------------------------------- */
-
+/* ---------------------------------- status -------------------------------- */
 const ALL_STATUSES = ["confirmed", "pending", "cancelled", "completed", "no_show"] as const;
 type StatusKey = (typeof ALL_STATUSES)[number];
 
@@ -144,10 +136,7 @@ function statusStyles(status: StatusKey) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
-
+/* ---------------------------------- types --------------------------------- */
 export type UiAppointment = {
   id: string;
   date: Date; // zoned
@@ -160,60 +149,59 @@ export type UiAppointment = {
   team_member?: string | null;
 };
 
+/* -------- adapter para o shape de app/store-schedule (RPC + enrichment) --- */
 function bookingToUi(b: any, tz: string): UiAppointment {
   const start = new Date(b.start_ts);
   const end = new Date(b.end_ts);
   const zonedStart = utcToZonedTime(start, tz);
   const duration = differenceInMinutes(end, start);
   return {
-    id: b.id,
+    id: b.booking_id,
     date: zonedStart,
     time: formatInTimeZone(start, tz, "HH:mm"),
-    client: b.customers?.full_name || b.customers?.phone || "Cliente",
-    service: b.services?.name || "Serviço",
-    duration: duration > 0 ? duration : b.services?.duration_min ?? 30,
+    client: b.customer_phone || "Cliente",
+    service: b.service_name || "Serviço",
+    duration: duration > 0 ? duration : 30,
     price: (b.price_cents ?? 0) / 100,
     status: b.status as StatusKey,
-    team_member: b.team_members?.full_name ?? null,
+    team_member: b.team_member_name ?? null,
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                  DATA HOOK                                 */
-/* -------------------------------------------------------------------------- */
-
-function useAgendaData(businessId?: string, storeId?: string, range: { start: Date; end: Date } | null = null) {
+/* --------------------------------- data hook ------------------------------- */
+/** Busca TODOS os status, em um range de 30 dias para frente (a partir de hoje),
+ * e deixa a filtragem apenas no client.
+ */
+function useAgendaData(storeId?: string, businessId?: string, tz?: string) {
   const [loading, setLoading] = useState(false);
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
   const [services, setServices] = useState<Array<{ id: string; name: string }>>([]);
   const [providers, setProviders] = useState<Array<{ id: string; name: string }>>([]);
 
   const refresh = useCallback(async () => {
-    if (!businessId || !storeId || !range) return;
+    if (!storeId || !tz) return;
     setLoading(true);
     try {
-      const fromUTC = range.start.toISOString();
-      const toUTC = range.end.toISOString();
+      const todayZ = utcToZonedTime(new Date(), tz);
+      const fromZ = startOfDay(todayZ);
+      const toZ = endOfDay(addDays(todayZ, 30));
+      const fromUTC = zonedTimeToUtc(fromZ, tz).toISOString();
+      const toUTC = zonedTimeToUtc(toZ, tz).toISOString();
 
-      const { data: rows, error } = await supabase
-        .from("bookings")
-        .select(
-          `
-          id, business_id, store_id, service_id, team_member_id, customer_id,
-          start_ts, end_ts, status, price_cents, channel, notes,
-          customers:customers!bookings_customer_id_fkey(full_name, phone),
-          services:services!bookings_service_id_fkey(name, duration_min, color),
-          team_members:team_members!bookings_team_member_id_fkey(full_name)
-        `
-        )
-        .eq("business_id", businessId)
-        .eq("store_id", storeId)
-        .gte("start_ts", fromUTC)
-        .lt("start_ts", toUTC)
-        .order("start_ts", { ascending: true });
-
+      // chama a Edge Function que valida acesso e chama o RPC com service_role
+      const { data, error } = await supabase.functions.invoke("app/store-schedule", {
+        body: {
+          storeId,
+          from: fromUTC,
+          to: toUTC,
+          statuses: ["pending", "confirmed", "cancelled", "completed", "no_show"], // TODOS
+        },
+      });
       if (error) throw error;
 
+      setRows((data?.bookings ?? []) as any[]);
+
+      // listas auxiliares pra filtros
       const { data: svcRows } = await supabase
         .from("services")
         .select("id, name")
@@ -230,26 +218,22 @@ function useAgendaData(businessId?: string, storeId?: string, range: { start: Da
 
       setServices((svcRows ?? []).map((s: any) => ({ id: s.id, name: s.name })));
       setProviders((tmRows ?? []).map((m: any) => ({ id: m.id, name: m.full_name })));
-      setBookings(rows ?? []);
     } catch (e: any) {
       console.error(e);
       toast.error("Não foi possível carregar agendamentos");
     } finally {
       setLoading(false);
     }
-  }, [businessId, storeId, range?.start?.toISOString?.(), range?.end?.toISOString?.()]);
+  }, [storeId, tz]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  return { loading, bookings, services, providers, refresh };
+  return { loading, rows, services, providers, refresh };
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                   AGENDA                                   */
-/* -------------------------------------------------------------------------- */
-
+/* ---------------------------------- Agenda -------------------------------- */
 const DAY_LABEL = (d: Date, tz?: string) =>
   tz
     ? formatInTimeZone(d, tz, "EEEE, d 'de' MMM yyyy", { locale: ptBR as any } as any)
@@ -275,10 +259,10 @@ const Agenda: React.FC = () => {
   const tz = store?.timezone || "America/Sao_Paulo";
   const slotMin = store?.slot_duration_min || 30;
 
-  const [view, setView] = useState<"day" | "week">("day"); // DIA default
+  // DIA default (bloqueia "semana" no mobile como antes)
+  const [view, setView] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // força "Dia" no mobile (e mantém botões no desktop), usando media query direto
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const handler = (e: MediaQueryListEvent) => {
@@ -303,51 +287,33 @@ const Agenda: React.FC = () => {
   );
   const weekDaysZ = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStartZ, i)), [weekStartZ]);
 
-  const queryRange = useMemo(() => {
-    if (view === "day") {
-      const startZ = startOfDay(utcToZonedTime(currentDate, tz));
-      const endZ = endOfDay(startZ);
-      return { start: zonedTimeToUtc(startZ, tz), end: zonedTimeToUtc(endZ, tz) };
-    } else {
-      return {
-        start: zonedTimeToUtc(startOfDay(weekStartZ), tz),
-        end: zonedTimeToUtc(endOfDay(weekEndZ), tz),
-      };
-    }
-  }, [view, currentDate, tz, weekStartZ, weekEndZ]);
+  // carrega TUDO (30 dias, todos status) uma vez e filtra local
+  const { loading, rows, services, providers, refresh } = useAgendaData(storeId, business?.id, tz);
 
-  const { loading, bookings, services, providers, refresh } = useAgendaData(
-    business?.id,
-    storeId,
-    queryRange
-  );
-
-  // filtros
+  // filtros client-side
   const [statusFilter, setStatusFilter] = useState<StatusKey | "all">("all");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [providerFilter, setProviderFilter] = useState<string>("all");
 
   // modal
-  const [modal, setModal] = useState<{ open: boolean; a: UiAppointment | null }>({
-    open: false,
-    a: null,
-  });
+  const [modal, setModal] = useState<{ open: boolean; a: UiAppointment | null }>({ open: false, a: null });
 
   const adapted: UiAppointment[] = useMemo(
-    () => (bookings as any[]).map((b) => bookingToUi(b, tz)),
-    [bookings, tz]
+    () => (rows as any[]).map((b) => bookingToUi(b, tz)),
+    [rows, tz]
   );
 
+  // aplica filtros
   const filtered = useMemo(() => {
     return adapted.filter((a) => {
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
       if (serviceFilter !== "all" && a.service !== services.find((s) => s.id === serviceFilter)?.name) return false;
-      if (providerFilter !== "all" && a.team_member !== providers.find((p) => p.id === providerFilter)?.name)
-        return false;
+      if (providerFilter !== "all" && a.team_member !== providers.find((p) => p.id === providerFilter)?.name) return false;
       return true;
     });
   }, [adapted, statusFilter, serviceFilter, providerFilter, services, providers]);
 
+  // subset pra dia/semana
   const dayAppointments: UiAppointment[] = useMemo(
     () =>
       filtered
@@ -383,14 +349,14 @@ const Agenda: React.FC = () => {
           { locale: ptBR as any } as any
         )}`;
 
-  // store hours (dia atual)
+  // hours do dia atual
   const dayOfWeek = (getDay(utcToZonedTime(currentDate, tz)) + 0) % 7;
   const todayHours = hours.find((h) => h.day_of_week === dayOfWeek);
   const openMin = parseHH(todayHours?.open_time) ?? 8 * 60;
   const closeMin = parseHH(todayHours?.close_time) ?? 20 * 60;
   const isClosed = !!todayHours?.is_closed || openMin >= closeMin;
 
-  /* -------------------- mutations -------------------- */
+  /* ------------------------------- mutations ------------------------------ */
   const updateStatus = useCallback(
     async (bookingId: string, next: StatusKey) => {
       try {
@@ -438,14 +404,11 @@ const Agenda: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header (gradiente com recorte sem cortar dropdown) */}
+      {/* Header */}
       <div className="relative rounded-2xl border border-gray-200/60 dark:border-gray-800/60">
-        {/* Camada de fundo com overflow-hidden apenas para o gradiente */}
         <div aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/40 dark:via-gray-950 dark:to-purple-950/30" />
         </div>
-
-        {/* Conteúdo acima do fundo */}
         <div className="relative p-5 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="min-w-0">
@@ -462,9 +425,8 @@ const Agenda: React.FC = () => {
               </p>
             </div>
 
-            {/* Controls */}
             <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-3 w-full md:w-auto">
-              {/* Filters */}
+              {/* filtros */}
               <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                 {/* Mobile: dropdown de status */}
                 <div className="md:hidden w-full">
@@ -527,7 +489,7 @@ const Agenda: React.FC = () => {
                 )}
               </div>
 
-              {/* Segmented (desktop) */}
+              {/* segment view (desktop) */}
               <div className="hidden md:inline-flex p-1 rounded-xl bg-gray-100/80 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => setView("day")}
@@ -553,7 +515,7 @@ const Agenda: React.FC = () => {
                 </button>
               </div>
 
-              {/* Navegação */}
+              {/* navegação */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={goPrev}
@@ -662,9 +624,7 @@ const Agenda: React.FC = () => {
 
 export default Agenda;
 
-/* -------------------------------------------------------------------------- */
-/*                              SUB-COMPONENTES UI                             */
-/* -------------------------------------------------------------------------- */
+/* ----------------------------- SUB-COMPONENTES ---------------------------- */
 
 const CardShell: React.FC<React.PropsWithChildren<{ className?: string }>> = ({
   className = "",
@@ -737,7 +697,7 @@ const StatusFilterDropdown: React.FC<{
     <Listbox value={value} onChange={onChange}>
       <div className="relative w-full">
         <Listbox.Button
-          className="relative w-full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
+          className="relative w-full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
           aria-label="Filtrar status"
         >
           <span className="flex items-center gap-2">
@@ -782,7 +742,6 @@ const StatusFilterDropdown: React.FC<{
 };
 
 /* --------------------------------- DAY VIEW -------------------------------- */
-
 const DayTimeline: React.FC<{
   date: Date; // zoned
   appointments: UiAppointment[];
@@ -793,7 +752,6 @@ const DayTimeline: React.FC<{
   isClosed: boolean;
   onOpen: (a: UiAppointment) => void;
 }> = ({ date, appointments, loading, tz, openMin, closeMin, isClosed, onOpen }) => {
-  // range dinâmico
   const defaultStart = openMin ?? 8 * 60;
   const defaultEnd = closeMin ?? 20 * 60;
   const mins = appointments.map((a) => timeToMinutes(a.time));
@@ -811,7 +769,6 @@ const DayTimeline: React.FC<{
   const totalHeight = hoursList.length * ROW_H;
   const pxPerMin = totalHeight / totalMinutes;
 
-  // indicador de "agora"
   const nowZ = utcToZonedTime(new Date(), tz);
   const isToday = sameDay(nowZ, date);
   const nowMin = nowZ.getHours() * 60 + nowZ.getMinutes();
@@ -821,7 +778,6 @@ const DayTimeline: React.FC<{
   return (
     <CardShell>
       <div className="p-0">
-        {/* Header do dia */}
         <div className="flex items-center justify-between px-4 md:px-5 pt-4 pb-3">
           <div className="text-sm font-semibold text-gray-800 dark:text-gray-300 uppercase tracking-wide">
             {formatInTimeZone(date, tz, "EEEE", { locale: ptBR as any } as any)}
@@ -841,7 +797,6 @@ const DayTimeline: React.FC<{
           </div>
         ) : (
           <div className="grid grid-cols-[56px_1fr]">
-            {/* Label das horas */}
             <div className="border-t border-gray-200 dark:border-gray-800">
               {hoursList.map((m) => (
                 <div key={m} className="h-14 flex items-start justify-end pr-2 text-xs text-gray-500 dark:text-gray-400 relative">
@@ -850,14 +805,11 @@ const DayTimeline: React.FC<{
               ))}
             </div>
 
-            {/* Canvas */}
             <div className="relative border-t border-l border-gray-200 dark:border-gray-800 overflow-hidden">
-              {/* linhas da grade */}
               {hoursList.map((m, idx) => (
                 <div key={m} className={`h-14 border-b border-gray-200/70 dark:border-gray-800/70 ${idx === 0 ? "" : ""}`} />
               ))}
 
-              {/* agora */}
               {showNow && (
                 <div className="absolute left-0 right-0 flex items-center" style={{ top: `${Math.max(0, Math.min(100, nowPct))}%` }}>
                   <div className="w-2 h-2 rounded-full bg-rose-500 translate-y-[-1px]" />
@@ -865,7 +817,6 @@ const DayTimeline: React.FC<{
                 </div>
               )}
 
-              {/* agendamentos */}
               <div className="absolute inset-0">
                 {appointments.map((a) => {
                   const start = timeToMinutes(a.time);
@@ -887,7 +838,6 @@ const DayTimeline: React.FC<{
 };
 
 /* -------------------------------- WEEK GRID ------------------------------- */
-
 const WeekGrid: React.FC<{
   weekDays: Date[];
   weekAppointments: UiAppointment[];
@@ -979,7 +929,6 @@ const WeekGrid: React.FC<{
 };
 
 /* ------------------------------ STAT CARDS ------------------------------ */
-
 const toneStyles: Record<string, { bg: string; iconWrap: string; text: string }> = {
   blue: {
     bg: "from-blue-50/70 via-white to-white dark:from-blue-950/20 dark:via-gray-900 dark:to-gray-900",
@@ -1030,13 +979,11 @@ const StatCard: React.FC<{
 };
 
 /* ------------------------------ SKELETONS ------------------------------ */
-
 const SkeletonLine: React.FC<{ className?: string }> = ({ className = "" }) => (
   <div className={`animate-pulse rounded-md bg-gray-200/70 dark:bg-gray-800/70 h-10 ${className}`} />
 );
 
-/* ------------------------------- CONFIRM MODAL ------------------------------ */
-
+/* ------------------------------- DIALOGS/MODAL --------------------------- */
 const ConfirmDialog: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -1055,16 +1002,16 @@ const ConfirmDialog: React.FC<{
     <div className="fixed inset-0 z-[60]">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-x-0 top-20 mx-auto w-[92%] max-w-md">
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg.white dark:bg-gray-900 shadow-xl">
           <div className="p-5">
-            <h4 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h4>
+            <h4 className="text-lg font.bold text-gray-900 dark:text-white">{title}</h4>
             {description && (
               <p className="mt-1.5 text-sm text-gray-700 dark:text-gray-300">{description}</p>
             )}
-            <div className="mt-5 flex items-center justify-end gap-2">
+            <div className="mt-5 flex items-center justify.end gap-2">
               <button
                 onClick={onClose}
-                className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
+                className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg.white dark:bg-gray-900 text-gray-800 dark:text-gray-100"
               >
                 Voltar
               </button>
@@ -1078,8 +1025,6 @@ const ConfirmDialog: React.FC<{
     </div>
   );
 };
-
-/* ---------------------------------- MODAL --------------------------------- */
 
 const ActionButton: React.FC<React.PropsWithChildren<{ onClick?: () => void; className?: string; title?: string }>> = ({
   onClick,
@@ -1105,9 +1050,9 @@ const StatusPickerMobile: React.FC<{
   const CurrentIcon = statusIcon(current);
   return (
     <Listbox value={current} onChange={(v) => onChange(v)}>
-      <div className="relative w-full">
+      <div className="relative w.full">
         <Listbox.Button
-          className="relative w-full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
+          className="relative w.full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
           aria-label="Alterar status"
         >
           <span className="flex items-center gap-2">
@@ -1119,7 +1064,7 @@ const StatusPickerMobile: React.FC<{
           </span>
         </Listbox.Button>
         <Transition leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
-          <Listbox.Options className="absolute z-[70] mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
+          <Listbox.Options className="absolute z-[70] mt-1 max-h-60 w.full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg.white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
             {options.map((s) => {
               const Icon = statusIcon(s);
               return (
@@ -1176,7 +1121,6 @@ const AppointmentModal: React.FC<{
     return () => document.removeEventListener("keydown", onEsc);
   }, [open, onClose]);
 
-  // confirmação
   const [confirm, setConfirm] = useState<{ open: boolean; next: StatusKey | null }>({ open: false, next: null });
   const askConfirm = (next: StatusKey) => setConfirm({ open: true, next });
   const doConfirm = () => {
@@ -1195,10 +1139,8 @@ const AppointmentModal: React.FC<{
     noShow: appointment.status === "no_show",
   };
 
-  // opções de duração (múltiplos do slot)
   const durationOptions = Array.from({ length: 8 }, (_, i) => (i + 1) * slotMin);
 
-  // mensagens da confirmação
   const confirmCopy = (next: StatusKey) =>
     next === "cancelled"
       ? { title: "Cancelar agendamento?", desc: "Essa ação marca o agendamento como cancelado.", tone: "danger" as const, cta: "Cancelar" }
@@ -1214,7 +1156,6 @@ const AppointmentModal: React.FC<{
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute inset-x-0 top-12 mx-auto w-[95%] max-w-lg">
-        {/* remove overflow-hidden para dropdown não ser cortado */}
         <div className={`rounded-2xl border ${s.badge} shadow-xl`}>
           <div className="p-4 md:p-5 flex items-start justify-between">
             <div>
@@ -1224,7 +1165,7 @@ const AppointmentModal: React.FC<{
                   {appointment.time} · {appointment.duration} min
                 </span>
               </div>
-              <h3 className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{appointment.service}</h3>
+              <h3 className="mt-1 text-lg font-bold text-gray-900 dark:text.white">{appointment.service}</h3>
               <p className="text-sm text-gray-800 dark:text-gray-200">
                 {appointment.client}
                 {appointment.team_member ? ` · ${appointment.team_member}` : ""}
@@ -1248,7 +1189,7 @@ const AppointmentModal: React.FC<{
                   type="time"
                   value={hhmm}
                   onChange={(e) => setHhmm(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80"
+                  className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80"
                 />
               </div>
               <div>
@@ -1256,7 +1197,7 @@ const AppointmentModal: React.FC<{
                 <select
                   value={dur}
                   onChange={(e) => setDur(parseInt(e.target.value, 10))}
-                  className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80"
+                  className="px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80"
                 >
                   {durationOptions.map((m) => (
                     <option key={m} value={m}>
@@ -1267,16 +1208,15 @@ const AppointmentModal: React.FC<{
               </div>
               <ActionButton
                 onClick={() => onSaveTime(appointment, hhmm, dur)}
-                className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
+                className="border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80 hover:bg.white dark:hover:bg-gray-900"
                 title="Salvar horário"
               >
                 Salvar
               </ActionButton>
             </div>
 
-            {/* Status — mobile: dropdown; desktop: botões (CSS responsivo) */}
+            {/* Status — mobile: dropdown; desktop: botões */}
             <div className="flex flex-col gap-2 pt-2">
-              {/* Mobile: dropdown */}
               <div className="md:hidden">
                 <label className="text-xs block mb-1 opacity-80">Status</label>
                 <StatusPickerMobile
@@ -1289,7 +1229,6 @@ const AppointmentModal: React.FC<{
                 />
               </div>
 
-              {/* Desktop: botões */}
               <div className="hidden md:flex flex-wrap items-center gap-2">
                 <ActionButton
                   onClick={() => askConfirm("confirmed")}
@@ -1334,7 +1273,7 @@ const AppointmentModal: React.FC<{
                 {(appointment.status === "cancelled" || appointment.status === "no_show") && (
                   <ActionButton
                     onClick={() => askConfirm("pending")}
-                    className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
+                    className="border-gray-300 dark:border-gray-700 bg.white/80 dark:bg-gray-900/80 hover:bg.white dark:hover:bg-gray-900"
                     title="Reabrir como pendente"
                   >
                     <RotateCcw className="w-4 h-4" /> Reabrir
@@ -1346,7 +1285,6 @@ const AppointmentModal: React.FC<{
         </div>
       </div>
 
-      {/* Confirmação */}
       <ConfirmDialog
         open={confirm.open}
         onClose={() => setConfirm({ open: false, next: null })}
