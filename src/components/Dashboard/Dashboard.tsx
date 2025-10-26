@@ -25,7 +25,6 @@ import {
   endOfMonth,
   eachDayOfInterval,
   subMonths,
-  subDays,
   isSameDay,
   format as formatDate,
 } from "date-fns";
@@ -49,17 +48,37 @@ function parseTimeToMinutes(t?: string | null) {
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+function monthKeyToLabel(monthKey: string) {
+  const [y, m] = monthKey.split("-").map((n) => parseInt(n, 10));
+  const d = new Date(Date.UTC(y, (m || 1) - 1, 1));
+  return capitalize(formatDate(d, "LLL/yy", { locale: ptBR }));
+}
 
-type NextAppt = {
+/* ------------------------------ types (frente) ----------------------------- */
+type RPCSeriesItem = { month_key: string; agendamentos: number; faturamento_cents: number };
+type RPCUpcomingItem = {
   id: string;
   start_ts: string;
   end_ts: string;
   price_cents: number;
   status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
-  services?: { name: string; duration_min: number | null };
-  team_members?: { full_name: string; profile_pic: string | null };
-  customers?: { full_name: string | null; phone: string | null };
+  service: { name: string | null; duration_min: number | null };
+  team_member: { full_name: string | null; profile_pic: string | null };
+  customer: { full_name: string | null; phone: string | null };
 };
+type RPCData = {
+  today: { appointments: number; confirmed: number };
+  mtd: {
+    appointments: number;
+    revenue_cents: number;
+    active_clients: number;
+    active_clients_prev: number;
+    occupancy_pct: number;
+  };
+  series6m: RPCSeriesItem[];
+  upcoming: RPCUpcomingItem[];
+};
+
 type Series6M = { label: string; monthKey: string; agendamentos: number; faturamento: number };
 
 /** Card base, com modo compacto para mobile/PWA */
@@ -149,188 +168,46 @@ const Dashboard: React.FC = () => {
 
   // séries (6 meses) e próximos
   const [series6M, setSeries6M] = React.useState<Series6M[]>([]);
-  const [upcoming, setUpcoming] = React.useState<NextAppt[]>([]);
+  const [upcoming, setUpcoming] = React.useState<RPCUpcomingItem[]>([]);
 
   React.useEffect(() => {
     const run = async () => {
       if (!business?.id) return;
       setLoading(true);
       try {
-        const now = new Date();
-        const nowZ = utcToZonedTime(now, tz);
-
-        const todayStartZ = startOfDay(nowZ);
-        const todayEndZ = endOfDay(nowZ);
-
-        const monthStartZ = startOfMonth(nowZ);
-        const prevMonthStartZ = startOfMonth(subMonths(nowZ, 1));
-        const prevMonthEndZ = endOfMonth(subMonths(nowZ, 1));
-
-        // para gráficos (6 meses)
-        const sixStartZ = startOfMonth(subMonths(nowZ, 5));
-        const sixEndZ = endOfMonth(nowZ);
-
-        // últimos 7 dias (para lista a gente já fazia filtros; mantemos série somente para charts 6M agora)
-        const future30EndZ = endOfDay(addDays(nowZ, 30));
-
-        const todayStartUTC = zonedTimeToUtc(todayStartZ, tz).toISOString();
-        const todayEndUTC = zonedTimeToUtc(todayEndZ, tz).toISOString();
-
-        const monthStartUTC = zonedTimeToUtc(monthStartZ, tz).toISOString();
-        const prevMonthStartUTC = zonedTimeToUtc(prevMonthStartZ, tz).toISOString();
-        const prevMonthEndUTC = zonedTimeToUtc(prevMonthEndZ, tz).toISOString();
-
-        const sixStartUTC = zonedTimeToUtc(sixStartZ, tz).toISOString();
-        const sixEndUTC = zonedTimeToUtc(sixEndZ, tz).toISOString();
-
-        const future30EndUTC = zonedTimeToUtc(future30EndZ, tz).toISOString();
-
-        const allowed = ["pending", "confirmed", "completed"]; // exclui cancelados/no_show
-
-        // Hoje
-        const { data: todayRows, error: todayErr } = await supabase
-          .from("bookings")
-          .select("id,status,price_cents,start_ts")
-          .eq("business_id", business.id)
-          .gte("start_ts", todayStartUTC)
-          .lte("start_ts", todayEndUTC)
-          .in("status", allowed);
-        if (todayErr) throw todayErr;
-
-        const totalToday = todayRows?.length || 0;
-        const confirmedToday = (todayRows || []).filter((r) => r.status === "confirmed").length;
-
-        // MTD (cards)
-        const { data: monthRows, error: monthErr } = await supabase
-          .from("bookings")
-          .select("start_ts,end_ts,status,price_cents,customer_id")
-          .eq("business_id", business.id)
-          .gte("start_ts", monthStartUTC)
-          .lte("start_ts", todayEndUTC)
-          .in("status", allowed);
-        if (monthErr) throw monthErr;
-
-        const mtdAppts = (monthRows || []).length;
-        const mtdRev = (monthRows || []).reduce((acc, r) => acc + (r.price_cents || 0), 0) / 100;
-
-        // Clientes ativos: mês atual e mês anterior (distintos)
-        const customersThisMonth = new Set((monthRows || []).map((r) => r.customer_id));
-        const { data: prevRows, error: prevErr } = await supabase
-          .from("bookings")
-          .select("customer_id,status,start_ts")
-          .eq("business_id", business.id)
-          .gte("start_ts", prevMonthStartUTC)
-          .lte("start_ts", prevMonthEndUTC)
-          .in("status", allowed);
-        if (prevErr) throw prevErr;
-        const customersPrevMonth = new Set((prevRows || []).map((r) => r.customer_id));
-
-        // Ocupação (média mês): minutos agendados / minutos abertos
-        const bookedMin = (monthRows || []).reduce((acc, r) => {
-          const start = new Date(r.start_ts).getTime();
-          const end = new Date(r.end_ts).getTime();
-          const mins = Math.max(0, Math.round((end - start) / 60000));
-          return acc + mins;
-        }, 0);
-        const { data: stores, error: storesErr } = await supabase
-          .from("stores")
-          .select("id")
-          .eq("business_id", business.id);
-        if (storesErr) throw storesErr;
-        const storeIds = (stores || []).map((s) => s.id);
-        let openMinutesMTD = 0;
-        if (storeIds.length > 0) {
-          const { data: hours, error: hoursErr } = await supabase
-            .from("store_hours")
-            .select("store_id,day_of_week,open_time,close_time,is_closed")
-            .in("store_id", storeIds);
-          if (hoursErr) throw hoursErr;
-
-          const daysInRange = eachDayOfInterval({ start: monthStartZ, end: todayEndZ });
-          const hoursByStore = new Map<string, any[]>();
-          for (const h of hours || []) {
-            const arr = hoursByStore.get(h.store_id) || [];
-            arr.push(h);
-            hoursByStore.set(h.store_id, arr);
-          }
-          for (const day of daysInRange) {
-            const dow = day.getDay(); // 0..6
-            for (const sid of storeIds) {
-              const rows = (hoursByStore.get(sid) || []).filter((h) => h.day_of_week === dow);
-              if (!rows.length) continue;
-              for (const r of rows) {
-                if (r.is_closed) continue;
-                const openMin = parseTimeToMinutes(r.open_time);
-                const closeMin = parseTimeToMinutes(r.close_time);
-                const diff = Math.max(0, closeMin - openMin);
-                openMinutesMTD += diff;
-              }
-            }
-          }
-        }
-        const occ = openMinutesMTD > 0 ? Math.round((bookedMin / openMinutesMTD) * 100) : 0;
-
-        // Série 6 meses (agendamentos + faturamento por mês)
-        const { data: sixRows, error: sixErr } = await supabase
-          .from("bookings")
-          .select("id,status,price_cents,start_ts")
-          .eq("business_id", business.id)
-          .gte("start_ts", sixStartUTC)
-          .lte("start_ts", sixEndUTC)
-          .in("status", allowed);
-        if (sixErr) throw sixErr;
-
-        const months: Date[] = Array.from({ length: 6 }, (_, i) => addMonths(sixStartZ, i));
-        const s6: Series6M[] = months.map((m) => {
-          const monthKey = formatDate(m, "yyyy-MM");
-          const labelRaw = formatDate(m, "LLL/yy", { locale: ptBR }); // ex: set/25
-          const label = capitalize(labelRaw);
-          const filtered = (sixRows || []).filter((r) => {
-            const z = utcToZonedTime(new Date(r.start_ts), tz);
-            return formatDate(z, "yyyy-MM") === monthKey;
-          });
-          const ag = filtered.length;
-          const fat = filtered.reduce((acc, r) => acc + (r.price_cents || 0), 0) / 100;
-          return { label, monthKey, agendamentos: ag, faturamento: fat };
+        // Chama o RPC único (RLS via invoker)
+        const { data, error } = await supabase.rpc("dashboard_summary", {
+          p_business_id: business.id,
+          p_tz: tz,
         });
 
-        // Próximos 7 (até +30 dias)
-        const { data: nextRows, error: nextErr } = await supabase
-          .from("bookings")
-          .select(
-            `
-            id,
-            start_ts,
-            end_ts,
-            price_cents,
-            status,
-            services ( name, duration_min ),
-            team_members ( full_name, profile_pic ),
-            customers ( full_name, phone )
-          `
-          )
-          .eq("business_id", business.id)
-          .gte("start_ts", new Date().toISOString())
-          .lte("start_ts", future30EndUTC)
-          .in("status", allowed)
-          .order("start_ts", { ascending: true })
-          .limit(30);
-        if (nextErr) throw nextErr;
+        if (error) throw error;
 
-        const next7 = (nextRows || []).slice(0, 7);
+        const d = (data || {}) as RPCData;
 
-        // set states
-        setTodayAppointments(totalToday);
-        setTodayConfirmed(confirmedToday);
-        setMtdAppointments(mtdAppts);
-        setMtdRevenue(mtdRev);
-        setActiveClientsMonth(customersThisMonth.size);
-        setActiveClientsPrevMonth(customersPrevMonth.size);
-        setOccupancyRate(occ);
-        setSeries6M(s6);
-        setUpcoming(next7 as any);
+        // Cards
+        setTodayAppointments(d?.today?.appointments ?? 0);
+        setTodayConfirmed(d?.today?.confirmed ?? 0);
+
+        setMtdAppointments(d?.mtd?.appointments ?? 0);
+        setMtdRevenue(((d?.mtd?.revenue_cents ?? 0) as number) / 100);
+        setActiveClientsMonth(d?.mtd?.active_clients ?? 0);
+        setActiveClientsPrevMonth(d?.mtd?.active_clients_prev ?? 0);
+        setOccupancyRate(d?.mtd?.occupancy_pct ?? 0);
+
+        // Série 6 meses
+        const mappedS6: Series6M[] = (d?.series6m ?? []).map((row: RPCSeriesItem) => ({
+          label: monthKeyToLabel(row.month_key),
+          monthKey: row.month_key,
+          agendamentos: row.agendamentos ?? 0,
+          faturamento: (row.faturamento_cents ?? 0) / 100,
+        }));
+        setSeries6M(mappedS6);
+
+        // Próximos 7
+        setUpcoming((d?.upcoming ?? []) as RPCUpcomingItem[]);
       } catch (e) {
-        console.error("[dashboard load] ", e);
+        console.error("[dashboard rpc] ", e);
       } finally {
         setLoading(false);
       }
@@ -423,7 +300,7 @@ const Dashboard: React.FC = () => {
                 {!hasActiveTeam && (
                   <Link
                     to="/equipe"
-                    className="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium hover:bg-white/70 dark:hover/bg-gray-900/70"
+                    className="mt-3 inline-flex items-center justify-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-sm font-medium hover:bg-white/70 dark:hover:bg-gray-900/70"
                   >
                     Ir para Equipe
                   </Link>
@@ -461,7 +338,7 @@ const Dashboard: React.FC = () => {
               <p className="text-[11px] md:text-xs font-medium text-gray-600 dark:text-gray-400">
                 Agendamentos no mês
               </p>
-            <p className="text-xl md:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+              <p className="text-xl md:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                 {loading ? skeleton : mtdAppointments}
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -562,7 +439,7 @@ const Dashboard: React.FC = () => {
             <h3 className="text-base md:text-lg font-semibold text-gray-900 dark:text-white">
               Próximos Agendamentos
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Até 30 dias à frente • mostrando os próximos 7</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Mostrando os próximos 7</p>
           </div>
 
           <div className="p-4 md:p-6">
@@ -590,11 +467,11 @@ const Dashboard: React.FC = () => {
                 {upcoming.map((a) => {
                   const zStart = utcToZonedTime(new Date(a.start_ts), tz);
                   const when = fmtApptWhen(zStart);
-                  const provName = a.team_members?.full_name || "Profissional";
-                  const provPic = a.team_members?.profile_pic || null;
-                  const custName = a.customers?.full_name || "Cliente";
-                  const custPhone = formatPhoneBR(a.customers?.phone || "");
-                  const service = a.services?.name || "Serviço";
+                  const provName = a.team_member?.full_name || "Profissional";
+                  const provPic = a.team_member?.profile_pic || null;
+                  const custName = a.customer?.full_name || "Cliente";
+                  const custPhone = formatPhoneBR(a.customer?.phone || "");
+                  const service = a.service?.name || "Serviço";
                   const price = BRL.format((a.price_cents || 0) / 100);
 
                   return (
@@ -605,20 +482,17 @@ const Dashboard: React.FC = () => {
                           {when}
                         </div>
 
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {/* nome + telefone na MESMA linha */}
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {custName}
-                        </div>
-                        <div className="text-xs text-gray-600 dark:text-gray-400">
-                          {custPhone}
+                          {custPhone ? <span className="opacity-60"> • {custPhone}</span> : null}
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-gray-800 dark:text-gray-200 truncate">
-                            {service}
-                          </div>
-                          <div className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
-                            {price}
-                          </div>
+                        {/* serviço + valor */}
+                        <div className="text-sm text-gray-800 dark:text-gray-200 truncate">
+                          <span className="truncate">{service}</span>
+                          <span className="mx-1.5 opacity-60"> · </span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">{price}</span>
                         </div>
 
                         <div className="flex items-center gap-2 pt-1">
@@ -638,10 +512,12 @@ const Dashboard: React.FC = () => {
                           {when}
                         </div>
 
-                        {/* Dados do cliente */}
+                        {/* Dados do cliente (nome + tel) */}
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">{custName}</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{custPhone}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                            {custName}
+                            {custPhone ? <span className="opacity-60"> • {custPhone}</span> : null}
+                          </div>
                         </div>
 
                         {/* Serviço e valor (juntos) */}
