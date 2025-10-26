@@ -42,7 +42,7 @@ const OverviewTab: React.FC<{
   primary = '#6366f1',
   secondary = '#8b5cf6',
   goTo,
-  domainBase = 'suareserva.online',
+  domainBase = 'suareserva.digital',
   onSlugChanged,
 }) => {
   /* === Status via RPC === */

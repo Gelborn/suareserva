@@ -192,7 +192,7 @@ const StorePage: React.FC = () => {
                   {store.slug && (
                     <div className="inline-flex items-center gap-1">
                       <span className="opacity-70">🔗</span>
-                      <span>suareserva.online/{store.slug}</span>
+                      <span>suareserva.digital/{store.slug}</span>
                     </div>
                   )}
                 </div>

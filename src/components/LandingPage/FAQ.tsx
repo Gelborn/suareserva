@@ -83,7 +83,7 @@ const FAQ: React.FC = () => {
             Ainda tem dúvidas?
           </p>
           <a
-            href="mailto:suporte@suareserva.online"
+            href="mailto:suporte@suareserva.digital"
             className="inline-flex items-center text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-semibold"
           >
             Entre em contato conosco →
