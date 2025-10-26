@@ -199,6 +199,14 @@ const Agenda: React.FC = () => {
   const [view, setView] = useState<"day" | "week">("day");
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
+  // detecta PWA (standalone) para dar mais espaço no rodapé
+  const [isStandalone, setIsStandalone] = useState(false);
+  useEffect(() => {
+    const dm = window.matchMedia?.("(display-mode: standalone)")?.matches ?? false;
+    const iosStandalone = (navigator as any)?.standalone === true; // iOS
+    setIsStandalone(dm || iosStandalone);
+  }, []);
+
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
     const handler = (e: MediaQueryListEvent) => {
@@ -222,7 +230,7 @@ const Agenda: React.FC = () => {
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [providerId, setProviderId] = useState<string | null>(null); // obrigatório
 
-  // modal state (renomeado para evitar conflitos)
+  // modal state
   const [modalState, setModalState] = useState<{ open: boolean; a: UiAppointment | null }>({ open: false, a: null });
 
   // adapta rows
@@ -248,14 +256,12 @@ const Agenda: React.FC = () => {
   const providerById = useMemo(() => new Map(providers.map((p) => [p.id, p])), [providers]);
   const providerIdByName = useMemo(() => new Map(providers.map((p) => [p.name, p.id])), [providers]);
 
-  // carrega/decide provider default quando muda loja/profissionais/agendamentos
+  // carrega/decide provider default
   useEffect(() => {
     if (!selectedStoreId || !providers.length) return;
 
-    // Se já existe e ainda é válido, mantém
     if (providerId && providerById.has(providerId)) return;
 
-    // 1) tenta do localStorage (por loja)
     const lsKey = `agenda:lastProviderId:${selectedStoreId}`;
     let fromLS: string | null = null;
     try {
@@ -267,7 +273,6 @@ const Agenda: React.FC = () => {
       return;
     }
 
-    // 2) escolhe quem tem o próximo agendamento a partir de agora (fallback: mais próximo absoluto; fallback 2: primeiro)
     const now = Date.now();
     let bestFuturePid: string | undefined;
     let bestFutureTs = Number.POSITIVE_INFINITY;
@@ -304,16 +309,17 @@ const Agenda: React.FC = () => {
     } catch {}
   }, [selectedStoreId, providerId]);
 
-  // aplicar filtros (inclui filter por providerId via id/nome)
+  // aplicar filtros — “Todos” NÃO mostra cancelados
   const filtered = useMemo(() => {
     const providerName = providerId ? providerById.get(providerId)?.name : undefined;
 
     return adaptedEnriched.filter((a) => {
+      if (statusFilter === "all" && a.status === "cancelled") return false;
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
+
       if (serviceFilter !== "all" && a.service !== services.find((s) => s.id === serviceFilter)?.name) return false;
 
       if (providerId) {
-        // casa por id quando possível; fallback por nome
         const matchById = a.team_member_id && a.team_member_id === providerId;
         const matchByName = !a.team_member_id && providerName && a.team_member === providerName;
         if (!matchById && !matchByName) return false;
@@ -349,7 +355,12 @@ const Agenda: React.FC = () => {
   const stats = useMemo(() => {
     const total = visibleAppointments.length;
     const confirmed = visibleAppointments.filter((a) => a.status === "confirmed").length;
-    const revenue = visibleAppointments.reduce((acc, a) => acc + (a.price || 0), 0);
+
+    // Receita estimada: ignora cancelados e no-show
+    const revenue = visibleAppointments
+      .filter((a) => a.status !== "cancelled" && a.status !== "no_show")
+      .reduce((acc, a) => acc + (a.price || 0), 0);
+
     return { total, confirmed, rate: total ? Math.round((confirmed / total) * 100) : 0, revenue };
   }, [visibleAppointments]);
 
@@ -394,7 +405,7 @@ const Agenda: React.FC = () => {
         toast.error("Falha ao atualizar status");
       }
     },
-    [refresh] // setModalState é estável; não precisa nas deps
+    [refresh]
   );
 
   /* -------------------------------- options UI -------------------------------- */
@@ -429,6 +440,11 @@ const Agenda: React.FC = () => {
       </div>
     );
   }
+
+  // Espaço extra no rodapé em PWA
+  const bottomSpace = isStandalone
+    ? "calc(env(safe-area-inset-bottom, 16px) + 48px)"
+    : "calc(env(safe-area-inset-bottom, 16px) + 24px)";
 
   return (
     <div className="space-y-6">
@@ -633,7 +649,7 @@ const Agenda: React.FC = () => {
       />
 
       {/* PWA safe-area */}
-      <div className="md:hidden" style={{ height: "calc(env(safe-area-inset-bottom, 16px) + 24px)" }} />
+      <div className="md:hidden" style={{ height: bottomSpace }} />
     </div>
   );
 };

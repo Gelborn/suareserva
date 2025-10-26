@@ -17,7 +17,7 @@ import {
 import { Clock, User, Phone } from "lucide-react";
 
 /* --------------------------------- Consts --------------------------------- */
-const ROW_H = 56; // px por hora
+const ROW_H = 80; // px por hora (base)
 
 /* --------------------------------- Avatar --------------------------------- */
 function initials(name?: string | null) {
@@ -189,7 +189,6 @@ export const DayTimeline: React.FC<{
   isClosed: boolean;
   onOpen: (a: UiAppointment) => void;
 }> = ({ date, appointments, loading, tz, openMin, closeMin, isClosed, onOpen }) => {
-  // range dinâmico
   const defaultStart = openMin ?? 8 * 60;
   const defaultEnd = closeMin ?? 20 * 60;
   const mins = appointments.map((a) => timeToMinutes(a.time));
@@ -201,21 +200,70 @@ export const DayTimeline: React.FC<{
     (Math.max(defaultEnd, ends.length ? Math.max(...ends) : defaultEnd) + 60) / 60
   ) * 60;
 
-  const hoursList: number[] = useMemo(() => {
+  // escala por densidade (leve)
+  const densityScale = React.useMemo(() => {
+    if (appointments.length < 2) return 1;
+    const starts = appointments.map((a) => timeToMinutes(a.time)).sort((a, b) => a - b);
+    let minGap = Infinity;
+    for (let i = 1; i < starts.length; i++) minGap = Math.min(minGap, starts[i] - starts[i - 1]);
+    if (!isFinite(minGap) || minGap >= 20) return 1;
+    const scale = 20 / Math.max(5, minGap);
+    return Math.min(1.6, Math.max(1, scale));
+  }, [appointments]);
+
+  const rowH = ROW_H * densityScale;
+
+  const hoursList: number[] = React.useMemo(() => {
     const arr: number[] = [];
     for (let m = Math.max(0, rangeStartMin); m <= Math.min(24 * 60, rangeEndMin); m += 60) arr.push(m);
     return arr;
   }, [rangeStartMin, rangeEndMin]);
 
   const totalMinutes = Math.max(60, rangeEndMin - rangeStartMin);
-  const totalHeight = hoursList.length * ROW_H;
-  const pxPerMin = totalHeight / totalMinutes;
+  const baseTotalHeight = hoursList.length * rowH;
+  const pxPerMin = baseTotalHeight / totalMinutes;
 
-  // indicador de "agora" (no TZ da loja)
+  // anti-overlap robusto
+  type Placement = { id: string; top: number; height: number; baseTop: number; end: number };
+  const GAP = 8;            // px de respiro maior
+  const MIN_CARD_H = 56;    // altura mínima maior
+
+  const placements: Placement[] = React.useMemo(() => {
+    const base = appointments.map((a) => {
+      const startMin = timeToMinutes(a.time);
+      const baseTop = (startMin - rangeStartMin) * pxPerMin;
+      const height = Math.max(MIN_CARD_H, (a.duration || 30) * pxPerMin);
+      return { id: a.id, baseTop, height };
+    }).sort((x, y) => x.baseTop - y.baseTop || x.height - y.height);
+
+    const active: Placement[] = [];
+    const out: Placement[] = [];
+
+    for (const e of base) {
+      for (let i = active.length - 1; i >= 0; i--) {
+        if (active[i].end + GAP <= e.baseTop) active.splice(i, 1);
+      }
+      let top = e.baseTop;
+      if (active.length) {
+        const maxEnd = Math.max(...active.map((p) => p.end));
+        if (top < maxEnd + GAP) top = maxEnd + GAP;
+      }
+      const placed: Placement = { id: e.id, baseTop: e.baseTop, top, height: e.height, end: top + e.height };
+      out.push(placed);
+      active.push(placed);
+    }
+    return out;
+  }, [appointments, pxPerMin, rangeStartMin]);
+
+  // estende última linha se precisar
+  const maxBottom = placements.length ? Math.max(...placements.map((p) => p.end)) : 0;
+  const extraBottom = Math.max(0, maxBottom - baseTotalHeight);
+
+  // linha de "agora" em px
   const nowZ = utcToZonedTime(new Date(), tz);
   const isToday = sameDay(nowZ, date);
   const nowMin = nowZ.getHours() * 60 + nowZ.getMinutes();
-  const nowPct = ((nowMin - rangeStartMin) / totalMinutes) * 100;
+  const nowPx = (nowMin - rangeStartMin) * pxPerMin;
   const showNow = isToday && nowMin >= rangeStartMin && nowMin <= rangeEndMin;
 
   return (
@@ -240,51 +288,58 @@ export const DayTimeline: React.FC<{
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-[56px_1fr]">
-            {/* Label das horas */}
+          <div className="grid grid-cols-[64px_1fr]">{/* 64px pra coluna de horas respirar junto */}
+            {/* Coluna: horários */}
             <div className="border-t border-gray-200 dark:border-gray-800">
-              {hoursList.map((m) => (
-                <div
-                  key={m}
-                  className="h-14 flex items-start justify-end pr-2 text-xs text-gray-500 dark:text-gray-400 relative"
-                >
-                  <span className="translate-y-[-8px] tabular-nums">{minToHHMM(m)}</span>
-                </div>
-              ))}
+              {hoursList.map((m, idx) => {
+                const isLast = idx === hoursList.length - 1;
+                return (
+                  <div
+                    key={m}
+                    className="flex items-start justify-end pr-3 text-xs text-gray-500 dark:text-gray-400 relative"
+                    style={{ height: `${rowH + (isLast ? extraBottom : 0)}px` }}
+                  >
+                    <span className="translate-y-[-8px] tabular-nums">{minToHHMM(m)}</span>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Canvas */}
+            {/* Coluna: canvas */}
             <div className="relative border-t border-l border-gray-200 dark:border-gray-800 overflow-hidden">
               {/* linhas da grade */}
-              {hoursList.map((m, idx) => (
-                <div
-                  key={m}
-                  className={`h-14 border-b border-gray-200/70 dark:border-gray-800/70 ${idx === 0 ? "" : ""}`}
-                />
-              ))}
+              {hoursList.map((m, idx) => {
+                const isLast = idx === hoursList.length - 1;
+                return (
+                  <div
+                    key={m}
+                    className="border-b border-gray-200/70 dark:border-gray-800/70"
+                    style={{ height: `${rowH + (isLast ? extraBottom : 0)}px` }}
+                  />
+                );
+              })}
 
               {/* agora */}
               {showNow && (
                 <div
-                  className="absolute left-0 right-0 flex items-center"
-                  style={{ top: `${Math.max(0, Math.min(100, nowPct))}%` }}
+                  className="absolute left-0 right-0 flex items-center pointer-events-none"
+                  style={{ top: `${Math.max(0, Math.min(baseTotalHeight + extraBottom, nowPx))}px` }}
                 >
                   <div className="w-2 h-2 rounded-full bg-rose-500 translate-y-[-1px]" />
                   <div className="h-[2px] flex-1 bg-rose-500/80" />
                 </div>
               )}
 
-              {/* agendamentos */}
+              {/* cards */}
               <div className="absolute inset-0">
                 {appointments.map((a) => {
-                  const start = timeToMinutes(a.time);
-                  const topPx = (start - rangeStartMin) * pxPerMin;
-                  const heightPx = Math.max(40, (a.duration / totalMinutes) * totalHeight);
+                  const p = placements.find((x) => x.id === a.id);
+                  if (!p) return null;
                   return (
                     <div
                       key={a.id}
                       className="absolute left-2 right-2 md:left-3 md:right-3"
-                      style={{ top: topPx, height: heightPx }}
+                      style={{ top: p.top, height: p.height }}
                     >
                       <AppointmentCard a={a} onClick={onOpen} />
                     </div>
