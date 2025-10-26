@@ -1,25 +1,75 @@
+// src/components/agenda/AppointmentModal.tsx
 import React, { useEffect, useState } from "react";
 import {
-  CheckCircle2, Clock, Ban, CheckCheck, EyeOff, RotateCcw, X, ChevronsUpDown, Check
+  CheckCircle2, Clock, Ban, CheckCheck, EyeOff, X, Phone, User
 } from "lucide-react";
-import { Listbox, Transition } from "@headlessui/react";
 import {
-  UiAppointment, StatusKey, statusStyles,
-  statusIcon, statusLabel, ptBR, formatInTimeZone
+  UiAppointment, StatusKey, ptBR, formatInTimeZone, statusLabel, statusIcon, BRL
 } from "./shared";
 
-/* -------------------------------- helpers UI ------------------------------- */
+/* Avatar util (mesma ideia dos cards) */
+function initials(name?: string | null) {
+  if (!name) return "P";
+  const parts = (name || "").split(" ").filter(Boolean);
+  const a = parts[0]?.[0] ?? "";
+  const b = parts[parts.length - 1]?.[0] ?? "";
+  return (a + b).toUpperCase();
+}
+const Avatar: React.FC<{ url?: string | null; name?: string | null; size?: number }> = ({ url, name, size = 40 }) => {
+  const cls = "rounded-full object-cover";
+  const px = `${size}px`;
+  if (url) return <img src={url} alt={name ?? "Profissional"} className={cls} style={{ width: px, height: px }} />;
+  return (
+    <div
+      className="rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 grid place-items-center font-semibold"
+      style={{ width: px, height: px, fontSize: Math.max(10, size * 0.45) }}
+      aria-hidden
+    >
+      {initials(name)}
+    </div>
+  );
+};
 
-const ActionButton: React.FC<React.PropsWithChildren<{ onClick?: () => void; className?: string; title?: string }>> = ({
-  onClick, className = "", title, children,
-}) => (
+const ActionButton: React.FC<React.PropsWithChildren<{
+  onClick?: () => void;
+  className?: string;
+  title?: string;
+  disabled?: boolean;
+}>> = ({ onClick, className = "", title, disabled, children }) => (
   <button
     onClick={onClick}
-    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition ${className}`}
+    disabled={disabled}
+    aria-disabled={disabled ? true : undefined}
+    className={`inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-semibold border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-white/90 dark:hover:bg-gray-900/90 transition
+      ${disabled ? "opacity-50 pointer-events-none" : ""} ${className}`}
     title={title}
   >
     {children}
   </button>
+);
+
+/* Chip de status com cor */
+const STATUS_TONE: Record<StatusKey, { wrap: string; text: string; border: string }> = {
+  pending:   { wrap: "bg-slate-50 dark:bg-slate-900/40",   text: "text-slate-700 dark:text-slate-200",   border: "border-slate-200 dark:border-slate-700" },
+  confirmed: { wrap: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-200", border: "border-emerald-200 dark:border-emerald-800" },
+  cancelled: { wrap: "bg-rose-50 dark:bg-rose-900/30",     text: "text-rose-700 dark:text-rose-200",     border: "border-rose-200 dark:border-rose-800" },
+  completed: { wrap: "bg-indigo-50 dark:bg-indigo-900/30", text: "text-indigo-700 dark:text-indigo-200", border: "border-indigo-200 dark:border-indigo-800" },
+  no_show:   { wrap: "bg-amber-50 dark:bg-amber-900/30",   text: "text-amber-800 dark:text-amber-200",   border: "border-amber-200 dark:border-amber-800" },
+};
+
+const StatusChip: React.FC<{ status: StatusKey }> = ({ status }) => {
+  const t = STATUS_TONE[status];
+  const Icon = statusIcon(status);
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${t.wrap} ${t.text} ${t.border}`}>
+      <Icon className="h-3.5 w-3.5" />
+      {statusLabel(status)}
+    </span>
+  );
+};
+
+const SectionLabel: React.FC<React.PropsWithChildren> = ({ children }) => (
+  <div className="text-[11px] uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400 mb-2">{children}</div>
 );
 
 const ConfirmDialog: React.FC<{
@@ -60,64 +110,6 @@ const ConfirmDialog: React.FC<{
   );
 };
 
-/* ----------------------- Status picker (mesma UI mobile) ----------------------- */
-
-const StatusPickerMobile: React.FC<{
-  current: StatusKey;
-  onChange: (next: StatusKey) => void;
-}> = ({ current, onChange }) => {
-  const options: StatusKey[] = ["pending", "confirmed", "cancelled", "completed", "no_show"];
-  const CurrentIcon = statusIcon(current);
-  return (
-    <Listbox value={current} onChange={onChange}>
-      <div className="relative w-full">
-        <Listbox.Button
-          className="relative w-full cursor-pointer rounded-xl border border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 py-2 pl-3 pr-9 text-left text-sm text-gray-900 dark:text-gray-100"
-          aria-label="Alterar status"
-        >
-          <span className="flex items-center gap-2">
-            <CurrentIcon className="h-4 w-4" />
-            {statusLabel(current)}
-          </span>
-          <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-            <ChevronsUpDown className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-          </span>
-        </Listbox.Button>
-        <Transition leave="transition ease-in duration-100" leaveFrom="opacity-100" leaveTo="opacity-0">
-          <Listbox.Options className="absolute z-[170] mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1 shadow-lg focus:outline-none">
-            {options.map((s) => {
-              const Icon = statusIcon(s);
-              return (
-                <Listbox.Option
-                  key={s}
-                  value={s}
-                  className={({ active }) =>
-                    `cursor-pointer select-none px-3 py-2 text-sm flex items-center justify-between ${
-                      active ? "bg-gray-100 dark:bg-gray-800" : ""
-                    } text-gray-900 dark:text-gray-100`
-                  }
-                >
-                  {({ selected }) => (
-                    <>
-                      <span className="flex items-center gap-2">
-                        <Icon className="h-4 w-4" />
-                        {statusLabel(s)}
-                      </span>
-                      {selected && <Check className="h-4 w-4" />}
-                    </>
-                  )}
-                </Listbox.Option>
-              );
-            })}
-          </Listbox.Options>
-        </Transition>
-      </div>
-    </Listbox>
-  );
-};
-
-/* ------------------------------- AppointmentModal ------------------------------ */
-
 export const AppointmentModal: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -140,136 +132,166 @@ export const AppointmentModal: React.FC<{
   }, [open, onClose]);
 
   if (!open || !appointment) return null;
-  const s = statusStyles(appointment.status);
 
-  const disabled = {
-    confirm: appointment.status === "confirmed",
-    cancel: appointment.status === "cancelled",
-    complete: appointment.status === "completed",
-    noShow: appointment.status === "no_show",
+  // Desativa todos os botões quando cancelado OU concluído
+  const disabledAll = ["cancelled", "completed"].includes(appointment.status);
+
+  // Textos do dialog
+  const dialogTitle: Record<StatusKey, string> = {
+    cancelled: "Cancelar agendamento?",
+    confirmed: "Confirmar agendamento?",
+    completed: "Concluir agendamento?",
+    no_show: "Marcar como 'Não compareceu'?",
+    pending: "Confirmar ação?",
+  };
+  const dialogDesc: Record<StatusKey, string> = {
+    cancelled: "Essa ação marca o agendamento como cancelado.",
+    confirmed: "O cliente ficará confirmado.",
+    completed: "Marcar este agendamento como concluído.",
+    no_show: "O cliente não compareceu ao horário.",
+    pending: "Essa ação atualizará o status.",
+  };
+  const dialogCta: Record<StatusKey, string> = {
+    cancelled: "Cancelar",
+    confirmed: "Confirmar",
+    completed: "Concluir",
+    no_show: "Marcar",
+    pending: "Confirmar",
+  };
+  const dialogTone: Record<StatusKey, "ok" | "danger"> = {
+    cancelled: "danger",
+    no_show: "danger",
+    confirmed: "ok",
+    completed: "ok",
+    pending: "ok",
   };
 
   return (
-    <div className="fixed inset-0 z-[120]">
-      {/* overlay full (corrige faixa) */}
+    <div className="fixed inset-0 z-[120]" role="dialog" aria-modal="true" aria-label="Detalhes do agendamento">
       <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="fixed inset-x-0 top-12 mx-auto w-[95%] max-w-lg">
-        <div className={`rounded-2xl border ${s.badge} shadow-xl`}>
-          <div className="p-4 md:p-5 flex items-start justify-between">
+      <div className="fixed inset-x-0 top-10 mx-auto w-[95%] max-w-xl">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-2xl">
+          {/* Header minimal */}
+          <div className="flex items-start justify-between p-4 md:p-5">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
-                <Clock className="h-4 w-4" />
-                <span className="font-semibold text-sm">
-                  {formatInTimeZone(appointment.date, tz, "EEE, d 'de' MMM 'às' HH:mm", { locale: ptBR as any })} · {appointment.duration} min
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusChip status={appointment.status} />
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100">
+                  <Clock className="h-3.5 w-3.5" />
+                  {appointment.duration} min
                 </span>
+                {typeof appointment.price === "number" && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100">
+                    {BRL.format(appointment.price)}
+                  </span>
+                )}
               </div>
-              <h3 className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{appointment.service}</h3>
-              <p className="text-sm text-gray-800 dark:text-gray-200 truncate">
-                {appointment.client}{appointment.team_member ? ` · ${appointment.team_member}` : ""}
-              </p>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/60 dark:hover:bg-gray-800/60" aria-label="Fechar">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900"
+              aria-label="Fechar"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Status + Ações */}
-          <div className="px-4 md:px-5 pb-4 md:pb-5 space-y-3">
-            {/* Mobile: selector (mantido) */}
-            <div className="md:hidden">
-              <label className="text-xs block mb-1 opacity-80">Status</label>
-              <StatusPickerMobile
-                current={appointment.status}
-                onChange={(next) => {
-                  if (next !== appointment.status) askConfirm(next);
-                }}
-              />
-            </div>
+          <div className="divide-y divide-gray-200/80 dark:divide-gray-800/80">
+            {/* Bloco 1: Detalhes do agendamento */}
+            <section className="p-4 md:p-6">
+              <SectionLabel>Dados do agendamento</SectionLabel>
+              <div className="flex items-center gap-2 text-gray-900 dark:text-gray-100">
+                <Clock className="h-4 w-4 shrink-0" />
+                <span className="font-semibold text-sm">
+                  {formatInTimeZone(appointment.date, tz, "EEE, d 'de' MMM 'às' HH:mm", { locale: ptBR as any })}
+                </span>
+              </div>
 
-            {/* Desktop: botões em linha */}
-            <div className="hidden md:flex flex-wrap items-center gap-2">
-              <ActionButton
-                onClick={() => askConfirm("confirmed")}
-                className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${disabled.confirm ? "opacity-50 pointer-events-none" : ""}`}
-                title="Confirmar"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Confirmar
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("cancelled")}
-                className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${disabled.cancel ? "opacity-50 pointer-events-none" : ""}`}
-                title="Cancelar"
-              >
-                <Ban className="w-4 h-4" /> Cancelar
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("completed")}
-                className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${disabled.complete ? "opacity-50 pointer-events-none" : ""}`}
-                title="Concluir"
-              >
-                <CheckCheck className="w-4 h-4" /> Concluir
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("no_show")}
-                className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${disabled.noShow ? "opacity-50 pointer-events-none" : ""}`}
-                title="Marcar não compareceu"
-              >
-                <EyeOff className="w-4 h-4" /> Não compareceu
-              </ActionButton>
+              <h3 className="mt-2 text-xl font-bold tracking-tight text-gray-900 dark:text-white">{appointment.service}</h3>
 
-              {(appointment.status === "cancelled" || appointment.status === "no_show") && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                <User className="h-4 w-4" />
+                <span className="font-medium">{appointment.client}</span>
+                {appointment.phone && (
+                  <>
+                    <span className="opacity-60">·</span>
+                    <Phone className="h-4 w-4" />
+                    <span className="tabular-nums">{appointment.phone}</span>
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* Bloco 2: Profissional */}
+            <section className="p-4 md:p-6">
+              <SectionLabel>Quem irá atender</SectionLabel>
+              <div className="flex items-center gap-3">
+                <Avatar url={appointment.team_member_avatar} name={appointment.team_member} size={40} />
+                <div className="min-w-0">
+                  <div className="font-semibold text-gray-900 dark:text-white leading-tight">
+                    {appointment.team_member ?? "Profissional"}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Profissional</div>
+                </div>
+              </div>
+            </section>
+
+            {/* Bloco 3: Ações */}
+            <section className="p-4 md:p-6">
+              <SectionLabel>Ações</SectionLabel>
+
+              {/* desktop: linha; mobile: grid empilhada */}
+              <div className="hidden md:flex flex-wrap items-center gap-2">
                 <ActionButton
-                  onClick={() => askConfirm("pending")}
-                  className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
-                  title="Reabrir como pendente"
+                  onClick={() => askConfirm("confirmed")}
+                  disabled={disabledAll}
+                  title="Confirmar Agendamento"
                 >
-                  <RotateCcw className="w-4 h-4" /> Reabrir
+                  <CheckCircle2 className="w-4 h-4" /> Confirmar Agendamento
                 </ActionButton>
-              )}
-            </div>
 
-            {/* Mobile: mesmos botões empilhados */}
-            <div className="md:hidden flex flex-col gap-2">
-              <ActionButton
-                onClick={() => askConfirm("confirmed")}
-                className={`border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200 ${disabled.confirm ? "opacity-50 pointer-events-none" : ""}`}
-                title="Confirmar"
-              >
-                <CheckCircle2 className="w-4 h-4" /> Confirmar
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("cancelled")}
-                className={`border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-900/25 text-rose-800 dark:text-rose-200 ${disabled.cancel ? "opacity-50 pointer-events-none" : ""}`}
-                title="Cancelar"
-              >
-                <Ban className="w-4 h-4" /> Cancelar
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("completed")}
-                className={`border-indigo-300 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/25 text-indigo-800 dark:text-indigo-200 ${disabled.complete ? "opacity-50 pointer-events-none" : ""}`}
-                title="Concluir"
-              >
-                <CheckCheck className="w-4 h-4" /> Concluir
-              </ActionButton>
-              <ActionButton
-                onClick={() => askConfirm("no_show")}
-                className={`border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/25 text-slate-800 dark:text-slate-200 ${disabled.noShow ? "opacity-50 pointer-events-none" : ""}`}
-                title="Marcar não compareceu"
-              >
-                <EyeOff className="w-4 h-4" /> Não compareceu
-              </ActionButton>
-
-              {(appointment.status === "cancelled" || appointment.status === "no_show") && (
                 <ActionButton
-                  onClick={() => askConfirm("pending")}
-                  className="border-gray-300 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 hover:bg-white dark:hover:bg-gray-900"
-                  title="Reabrir como pendente"
+                  onClick={() => askConfirm("cancelled")}
+                  disabled={disabledAll}
+                  title="Cancelar este Agendamento"
                 >
-                  <RotateCcw className="w-4 h-4" /> Reabrir
+                  <Ban className="w-4 h-4" /> Cancelar este Agendamento
                 </ActionButton>
-              )}
-            </div>
+
+                <ActionButton
+                  onClick={() => askConfirm("completed")}
+                  disabled={disabledAll}
+                  title="Marcar como Concluído"
+                >
+                  <CheckCheck className="w-4 h-4" /> Marcar como Concluído
+                </ActionButton>
+
+                <ActionButton
+                  onClick={() => askConfirm("no_show")}
+                  disabled={disabledAll}
+                  title="Marcar como cliente não compareceu"
+                >
+                  <EyeOff className="w-4 h-4" /> Marcar como cliente não compareceu
+                </ActionButton>
+              </div>
+
+              {/* mobile */}
+              <div className="md:hidden grid grid-cols-1 gap-2">
+                <ActionButton onClick={() => askConfirm("confirmed")} disabled={disabledAll}>
+                  <CheckCircle2 className="w-4 h-4" /> Confirmar Agendamento
+                </ActionButton>
+                <ActionButton onClick={() => askConfirm("cancelled")} disabled={disabledAll}>
+                  <Ban className="w-4 h-4" /> Cancelar este Agendamento
+                </ActionButton>
+                <ActionButton onClick={() => askConfirm("completed")} disabled={disabledAll}>
+                  <CheckCheck className="w-4 h-4" /> Marcar como Concluído
+                </ActionButton>
+                <ActionButton onClick={() => askConfirm("no_show")} disabled={disabledAll}>
+                  <EyeOff className="w-4 h-4" /> Marcar como cliente não compareceu
+                </ActionButton>
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -278,28 +300,10 @@ export const AppointmentModal: React.FC<{
         open={confirm.open}
         onClose={() => setConfirm({ open: false, next: null })}
         onConfirm={doConfirm}
-        title={
-          confirm.next === "cancelled" ? "Cancelar agendamento?"
-            : confirm.next === "no_show" ? "Marcar como 'Não compareceu'?"
-            : confirm.next === "completed" ? "Concluir agendamento?"
-            : confirm.next === "confirmed" ? "Confirmar agendamento?"
-            : "Reabrir como pendente?"
-        }
-        description={
-          confirm.next === "cancelled" ? "Essa ação marca o agendamento como cancelado."
-            : confirm.next === "no_show" ? "O cliente não compareceu ao horário."
-            : confirm.next === "completed" ? "Marcar como concluído."
-            : confirm.next === "confirmed" ? "O cliente está confirmado."
-            : "Voltará ao status pendente."
-        }
-        confirmLabel={
-          confirm.next === "cancelled" ? "Cancelar"
-            : confirm.next === "no_show" ? "Marcar"
-            : confirm.next === "completed" ? "Concluir"
-            : confirm.next === "confirmed" ? "Confirmar"
-            : "Reabrir"
-        }
-        tone={confirm.next === "cancelled" || confirm.next === "no_show" ? "danger" : "ok"}
+        title={confirm.next ? dialogTitle[confirm.next] : "Confirmar ação?"}
+        description={confirm.next ? dialogDesc[confirm.next] : "Confirma a atualização deste agendamento?"}
+        confirmLabel={confirm.next ? dialogCta[confirm.next] : "Confirmar"}
+        tone={confirm.next ? dialogTone[confirm.next] : "ok"}
       />
     </div>
   );

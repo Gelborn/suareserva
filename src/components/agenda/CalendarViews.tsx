@@ -1,13 +1,53 @@
 // src/components/agenda/CalendarViews.tsx
 import React, { useMemo } from "react";
 import {
-  BRL, statusLabel, statusIcon, statusStyles,
-  timeToMinutes, sameDay, minToHHMM, formatInTimeZone, ptBR, UiAppointment
+  BRL,
+  statusLabel,
+  statusIcon,
+  statusStyles,
+  timeToMinutes,
+  sameDay,
+  minToHHMM,
+  formatInTimeZone,
+  ptBR,
+  UiAppointment,
+  utcToZonedTime,
+  formatPhoneBR,
 } from "./shared";
-import { Clock, User, Calendar } from "lucide-react";
+import { Clock, User, Phone } from "lucide-react";
 
-/* ----------------------------------- UI base ---------------------------------- */
+/* --------------------------------- Consts --------------------------------- */
+const ROW_H = 56; // px por hora
 
+/* --------------------------------- Avatar --------------------------------- */
+function initials(name?: string | null) {
+  if (!name) return "P";
+  const parts = (name || "").split(" ").filter(Boolean);
+  const a = parts[0]?.[0] ?? "";
+  const b = parts[parts.length - 1]?.[0] ?? "";
+  return (a + b).toUpperCase();
+}
+
+const Avatar: React.FC<{ url?: string | null; name?: string | null; size?: number }> = ({
+  url,
+  name,
+  size = 18,
+}) => {
+  const cls = "rounded-full object-cover";
+  const px = `${size}px`;
+  if (url) return <img src={url} alt={name ?? "Profissional"} className={cls} style={{ width: px, height: px }} />;
+  return (
+    <div
+      className="rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 grid place-items-center font-semibold"
+      style={{ width: px, height: px, fontSize: Math.max(10, size * 0.45) }}
+      aria-hidden
+    >
+      {initials(name)}
+    </div>
+  );
+};
+
+/* ------------------------------- Card Shell ------------------------------- */
 export const CardShell: React.FC<React.PropsWithChildren<{ className?: string }>> = ({
   className = "",
   children,
@@ -17,17 +57,20 @@ export const CardShell: React.FC<React.PropsWithChildren<{ className?: string }>
   </div>
 );
 
+/* ------------------------------- Empty Day -------------------------------- */
 export const EmptyDay: React.FC<{ label?: string }> = ({ label = "Sem agendamentos" }) => (
   <div className="text-center text-gray-500 dark:text-gray-500 py-10">
-    <Calendar className="h-8 w-8 mx-auto mb-2 opacity-60" />
+    <Clock className="h-8 w-8 mx-auto mb-2 opacity-60" />
     <p className="text-sm">{label}</p>
   </div>
 );
 
+/* ------------------------------ SkeletonLine ------------------------------ */
 export const SkeletonLine: React.FC<{ className?: string }> = ({ className = "" }) => (
   <div className={`animate-pulse rounded-md bg-gray-200/70 dark:bg-gray-800/70 h-10 ${className}`} />
 );
 
+/* -------------------------------- StatCard -------------------------------- */
 const toneStyles: Record<string, { bg: string; iconWrap: string; text: string }> = {
   blue: {
     bg: "from-blue-50/70 via-white to-white dark:from-blue-950/20 dark:via-gray-900 dark:to-gray-900",
@@ -77,8 +120,7 @@ export const StatCard: React.FC<{
   );
 };
 
-/* ----------------------------- Appointment Card ----------------------------- */
-
+/* ----------------------------- AppointmentCard ---------------------------- */
 export const AppointmentCard: React.FC<{
   a: UiAppointment;
   onClick?: (a: UiAppointment) => void;
@@ -106,28 +148,37 @@ export const AppointmentCard: React.FC<{
           )}
         </div>
 
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0 text-gray-900 dark:text-gray-100">
-            <User className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium truncate">{a.client}</span>
-          </div>
-          <div className="text-[11px] opacity-80 min-w-0 truncate text-gray-700 dark:text-gray-300">
-            {a.service}{a.team_member ? ` · ${a.team_member}` : ""}
-          </div>
-          <div className="flex items-center justify-between mt-2 text-gray-800 dark:text-gray-200">
-            <span className="text-[11px] opacity-80">{a.duration} min</span>
-            <span className="font-semibold">{BRL.format(a.price)}</span>
-          </div>
+        {/* Nome completo + telefone (com máscara) */}
+        <div className="flex items-center flex-wrap gap-1.5 text-gray-900 dark:text-gray-100">
+          <User className="h-3.5 w-3.5 shrink-0" />
+          <span className="font-medium">{a.client}</span>
+          {a.client && a.phone ? <span className="opacity-60">·</span> : null}
+          {a.phone ? (
+            <>
+              <Phone className="h-3 w-3 shrink-0" />
+              <span className="tabular-nums">{formatPhoneBR(a.phone)}</span>
+            </>
+          ) : null}
+        </div>
+
+        <div className="text-[11px] opacity-80 min-w-0 truncate text-gray-700 dark:text-gray-300 flex items-center gap-1.5 mt-1">
+          <span className="truncate">
+            {a.service}
+            {a.team_member ? ` · ${a.team_member}` : ""}
+          </span>
+          <Avatar url={a.team_member_avatar} name={a.team_member} size={16} />
+        </div>
+
+        <div className="flex items-center justify-between mt-2 text-gray-800 dark:text-gray-200">
+          <span className="text-[11px] opacity-80">{a.duration} min</span>
+          <span className="font-semibold">{BRL.format(a.price)}</span>
         </div>
       </button>
     </div>
   );
 };
 
-/* --------------------------------- Day View --------------------------------- */
-
-const ROW_H = 56; // px por hora
-
+/* -------------------------------- DayTimeline ------------------------------ */
 export const DayTimeline: React.FC<{
   date: Date; // zoned
   appointments: UiAppointment[];
@@ -138,12 +189,17 @@ export const DayTimeline: React.FC<{
   isClosed: boolean;
   onOpen: (a: UiAppointment) => void;
 }> = ({ date, appointments, loading, tz, openMin, closeMin, isClosed, onOpen }) => {
+  // range dinâmico
   const defaultStart = openMin ?? 8 * 60;
   const defaultEnd = closeMin ?? 20 * 60;
   const mins = appointments.map((a) => timeToMinutes(a.time));
   const ends = appointments.map((a) => timeToMinutes(a.time) + (a.duration || 30));
-  const rangeStartMin = Math.floor((Math.min(defaultStart, mins.length ? Math.min(...mins) : defaultStart) - 60) / 60) * 60;
-  const rangeEndMin = Math.ceil((Math.max(defaultEnd, ends.length ? Math.max(...ends) : defaultEnd) + 60) / 60) * 60;
+  const rangeStartMin = Math.floor(
+    (Math.min(defaultStart, mins.length ? Math.min(...mins) : defaultStart) - 60) / 60
+  ) * 60;
+  const rangeEndMin = Math.ceil(
+    (Math.max(defaultEnd, ends.length ? Math.max(...ends) : defaultEnd) + 60) / 60
+  ) * 60;
 
   const hoursList: number[] = useMemo(() => {
     const arr: number[] = [];
@@ -155,10 +211,17 @@ export const DayTimeline: React.FC<{
   const totalHeight = hoursList.length * ROW_H;
   const pxPerMin = totalHeight / totalMinutes;
 
+  // indicador de "agora" (no TZ da loja)
+  const nowZ = utcToZonedTime(new Date(), tz);
+  const isToday = sameDay(nowZ, date);
+  const nowMin = nowZ.getHours() * 60 + nowZ.getMinutes();
+  const nowPct = ((nowMin - rangeStartMin) / totalMinutes) * 100;
+  const showNow = isToday && nowMin >= rangeStartMin && nowMin <= rangeEndMin;
+
   return (
     <CardShell>
       <div className="p-0">
-        {/* header do dia */}
+        {/* Header do dia */}
         <div className="flex items-center justify-between px-4 md:px-5 pt-4 pb-3">
           <div className="text-sm font-semibold text-gray-800 dark:text-gray-300 uppercase tracking-wide">
             {formatInTimeZone(date, tz, "EEEE", { locale: ptBR as any })}
@@ -178,20 +241,38 @@ export const DayTimeline: React.FC<{
           </div>
         ) : (
           <div className="grid grid-cols-[56px_1fr]">
-            {/* labels de hora */}
+            {/* Label das horas */}
             <div className="border-t border-gray-200 dark:border-gray-800">
               {hoursList.map((m) => (
-                <div key={m} className="h-14 flex items-start justify-end pr-2 text-xs text-gray-500 dark:text-gray-400 relative">
+                <div
+                  key={m}
+                  className="h-14 flex items-start justify-end pr-2 text-xs text-gray-500 dark:text-gray-400 relative"
+                >
                   <span className="translate-y-[-8px] tabular-nums">{minToHHMM(m)}</span>
                 </div>
               ))}
             </div>
 
-            {/* canvas */}
+            {/* Canvas */}
             <div className="relative border-t border-l border-gray-200 dark:border-gray-800 overflow-hidden">
+              {/* linhas da grade */}
               {hoursList.map((m, idx) => (
-                <div key={m} className={`h-14 border-b border-gray-200/70 dark:border-gray-800/70 ${idx === 0 ? "" : ""}`} />
+                <div
+                  key={m}
+                  className={`h-14 border-b border-gray-200/70 dark:border-gray-800/70 ${idx === 0 ? "" : ""}`}
+                />
               ))}
+
+              {/* agora */}
+              {showNow && (
+                <div
+                  className="absolute left-0 right-0 flex items-center"
+                  style={{ top: `${Math.max(0, Math.min(100, nowPct))}%` }}
+                >
+                  <div className="w-2 h-2 rounded-full bg-rose-500 translate-y-[-1px]" />
+                  <div className="h-[2px] flex-1 bg-rose-500/80" />
+                </div>
+              )}
 
               {/* agendamentos */}
               <div className="absolute inset-0">
@@ -200,7 +281,11 @@ export const DayTimeline: React.FC<{
                   const topPx = (start - rangeStartMin) * pxPerMin;
                   const heightPx = Math.max(40, (a.duration / totalMinutes) * totalHeight);
                   return (
-                    <div key={a.id} className="absolute left-2 right-2 md:left-3 md:right-3" style={{ top: topPx, height: heightPx }}>
+                    <div
+                      key={a.id}
+                      className="absolute left-2 right-2 md:left-3 md:right-3"
+                      style={{ top: topPx, height: heightPx }}
+                    >
                       <AppointmentCard a={a} onClick={onOpen} />
                     </div>
                   );
@@ -214,8 +299,7 @@ export const DayTimeline: React.FC<{
   );
 };
 
-/* -------------------------------- Week Grid -------------------------------- */
-
+/* --------------------------------- WeekGrid -------------------------------- */
 export const WeekGrid: React.FC<{
   weekDays: Date[];
   weekAppointments: UiAppointment[];
@@ -223,11 +307,12 @@ export const WeekGrid: React.FC<{
   tz: string;
   onOpen: (a: UiAppointment) => void;
 }> = ({ weekDays, weekAppointments, loading, tz, onOpen }) => {
+  const todayZ = utcToZonedTime(new Date(), tz);
+
   return (
     <>
       <div className="hidden md:block">
         <CardShell className="overflow-hidden">
-          {/* header dos dias */}
           <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-800">
             {weekDays.map((day) => (
               <div
@@ -237,9 +322,14 @@ export const WeekGrid: React.FC<{
                 <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase">
                   {formatInTimeZone(day, tz, "EEE", { locale: ptBR as any })}
                 </div>
-                <div className="text-2xl font-extrabold mt-0.5 text-gray-900 dark:text-white">
+                <div
+                  className={`text-2xl font-extrabold mt-0.5 ${
+                    sameDay(day, todayZ) ? "text-indigo-500 dark:text-indigo-300" : "text-gray-900 dark:text-white"
+                  }`}
+                >
                   {formatInTimeZone(day, tz, "d", { locale: ptBR as any })}
                 </div>
+                {sameDay(day, todayZ) && <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500/80" />}
               </div>
             ))}
           </div>
@@ -255,35 +345,35 @@ export const WeekGrid: React.FC<{
               ))}
             </div>
           ) : (
-            <div className="max-h-[65vh] overflow-y-auto">
-              <div className="grid grid-cols-7">
-                {weekDays.map((day) => {
-                  const items = weekAppointments.filter((a) => sameDay(a.date, day));
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className="p-2.5 border-r border-gray-200/70 dark:border-gray-800/70 last:border-r-0 min-h-[280px] space-y-2"
-                    >
-                      {items.length === 0 ? (
-                        <EmptyDay label="—" />
-                      ) : (
-                        items.map((a) => <AppointmentCard key={a.id} a={a} onClick={onOpen} hideStatus />)
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="grid grid-cols-7 max-h-[70vh] overflow-y-auto">
+              {weekDays.map((day) => {
+                const items = weekAppointments.filter((a) => sameDay(a.date, day));
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className="p-2.5 border-r border-gray-200/70 dark:border-gray-800/70 last:border-r-0 min-h-[280px] space-y-2"
+                  >
+                    {items.length === 0 ? (
+                      <EmptyDay label="—" />
+                    ) : (
+                      items.map((a) => <AppointmentCard key={a.id} a={a} onClick={onOpen} hideStatus />)
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardShell>
       </div>
 
-      {/* mobile: semana resumida */}
+      {/* Mobile: semana escondida */}
       <div className="md:hidden">
         {loading ? (
           <CardShell>
             <div className="p-4 space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => <SkeletonLine key={i} />)}
+              {Array.from({ length: 5 }).map((_, i) => (
+                <SkeletonLine key={i} />
+              ))}
             </div>
           </CardShell>
         ) : (
