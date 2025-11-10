@@ -25,14 +25,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
   const [openProfile, setOpenProfile] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // mantém um nome "estável" entre refetches p/ evitar flash
   const [displayName, setDisplayName] = useState<string>(() => {
-    // tenta recuperar do storage (último conhecido)
     const fromLS = typeof window !== 'undefined' ? localStorage.getItem(LS_KEY) : null;
     return fromLS || user?.name || '';
   });
 
-  // fecha menu ao clicar fora / Esc
   useEffect(() => {
     if (!openMenu) return;
     const onDocClick = (e: MouseEvent) => {
@@ -47,9 +44,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
     };
   }, [openMenu]);
 
-  // sincroniza displayName:
-  // 1) se chegou business.name, prioriza e persiste
-  // 2) se não há business e terminou loading, usa user.name (se houver)
   useEffect(() => {
     if (business?.name) {
       setDisplayName(business.name);
@@ -60,9 +54,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
       setDisplayName(user.name);
       try { localStorage.setItem(LS_KEY, user.name); } catch {}
     }
-  }, [business?.name, businessLoading, user?.name]); // displayName intencionalmente fora
+  }, [business?.name, businessLoading, user?.name]);
 
-  // ao fechar o modal de perfil, refetch após breve delay
   useEffect(() => {
     if (!openProfile && user) {
       const t = setTimeout(() => refetch(), 300);
@@ -70,19 +63,18 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
     }
   }, [openProfile, user, refetch]);
 
-  // skeleton curto quando ainda não temos nenhum nome conhecido
   const nameNode = useMemo(() => {
     if (displayName && displayName.trim().length > 0) return displayName;
     if (businessLoading) {
       return (
-        <span className="inline-block h-3 w-20 rounded bg-gray-200 dark:bg-gray-900/60 animate-pulse" />
+        <span className="inline-block h-3 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
       );
     }
     return 'Conta';
   }, [displayName, businessLoading]);
 
   return (
-    <header className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-900/60 sticky top-0 z-40">
+    <header className="sticky top-0 z-40 relative bg-white dark:bg-gray-950">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6">
         <div className="flex items-center space-x-4">
           {showMenu && !isPWA && (
@@ -96,6 +88,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
           )}
 
           <div className="flex items-center">
+            {/* mantém o tamanho original do logo */}
             <img
               src={theme === 'dark' ? '/logo-white.png' : '/logo.png'}
               alt="SuaReserva"
@@ -178,6 +171,18 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
           )}
         </div>
       </div>
+
+      {/* hairline 1px, elegante (sem border) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -bottom-px h-px
+                   bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:hidden"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 -bottom-px h-px
+                   bg-gradient-to-r from-transparent via-white/50 to-transparent hidden dark:block"
+      />
 
       <ProfileModal open={openProfile} onClose={() => setOpenProfile(false)} />
     </header>
