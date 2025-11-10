@@ -445,8 +445,8 @@ const UnifiedLanding: React.FC<Props> = ({ onGetStarted, onContactClick }) => {
             <div className="md:col-span-2">
               <div className="flex items-center">
                 {/* Mostra o mesmo logo do header (sem depender do hook) */}
-                <img src="/logo.png" alt="SuaReserva" className="h-6 w-auto block dark:hidden" />
-                <img src="/logo-white.png" alt="SuaReserva" className="h-6 w-auto hidden dark:block" />
+                <img src="/logo.png" alt="SuaReserva" className="h-20 w-auto block dark:hidden" />
+                <img src="/logo-white.png" alt="SuaReserva" className="h-20 w-auto hidden dark:block" />
               </div>
               <p className="mt-3 text-gray-600 dark:text-gray-300 max-w-md">
                 A forma mais simples de organizar seus agendamentos e crescer com previsibilidade.
