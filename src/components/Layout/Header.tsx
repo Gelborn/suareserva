@@ -75,14 +75,14 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, showMenu = false, onLoginC
     if (displayName && displayName.trim().length > 0) return displayName;
     if (businessLoading) {
       return (
-        <span className="inline-block h-3 w-20 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <span className="inline-block h-3 w-20 rounded bg-gray-200 dark:bg-gray-900/60 animate-pulse" />
       );
     }
     return 'Conta';
   }, [displayName, businessLoading]);
 
   return (
-    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+    <header className="bg-white dark:bg-gray-950 border-b border-gray-200 dark:border-gray-900/60 sticky top-0 z-40">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6">
         <div className="flex items-center space-x-4">
           {showMenu && !isPWA && (
